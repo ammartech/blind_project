@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ term.term }} | قاموس المصطلحات{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <nav class="breadcrumb" aria-label="التنقل">
+    <a href="{% url 'service:glossary_list' %}">قاموس المصطلحات</a>
+    <span class="separator">›</span>
+    <span>{{ term.term }}</span>
+  </nav>
+
+  <h1>{{ term.term }}</h1>
+
+  {% if term.pronunciation_hint %}
+    <p class="pronunciation-hint">
+      <span class="label">تلميح النطق:</span>
+      <strong>{{ term.pronunciation_hint }}</strong>
+    </p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>التعريف</h2>
+  <p class="para definition-text">
+    {{ term.definition|linebreaksbr }}
+  </p>
+
+  <!-- Voice selector -->
+  <div class="tts-controls">
+    <span class="tts-controls-label">🔊 القراءة الصوتية:</span>
+    <div class="voice-selector" role="radiogroup" aria-label="اختيار الصوت">
+      <label class="voice-option selected">
+        <input type="radio" name="tts-voice" value="female" checked>
+        <span>👩 أنثى</span>
+      </label>
+      <label class="voice-option">
+        <input type="radio" name="tts-voice" value="male">
+        <span>👨 ذكر</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Glossary TTS -->
+  <div class="row">
+    <button class="tts-btn" type="button" onclick="playGlossaryTTSWithVoice({{ term.pk }}, 'full')">
+      🔊 قراءة المصطلح والتعريف
+    </button>
+  </div>
+
+  <p class="hint">ملاحظة: سيتم استخدام الصوت المختار (ذكر/أنثى) عند تشغيل القراءة.</p>
+</div>
+
+<div class="card stats-card">
+  <h3>إحصائيات</h3>
+  <div class="term-stats">
+    <span>👁️ المشاهدات: {{ term.view_count }}</span>
+    <span>🔊 مرات التشغيل: {{ term.tts_play_count }}</span>
+    <span>📅 أضيف: {{ term.created_at|date:"Y/m/d" }}</span>
+  </div>
+</div>
+
+{% if user.is_authenticated and user.is_librarian %}
+<div class="actions-card">
+  <a class="btn secondary" href="{% url 'service:glossary_edit' term.pk %}">✏️ تعديل</a>
+
+  <form method="post" action="{% url 'service:glossary_delete' term.pk %}"
+        class="inline-form"
+        onsubmit="return confirm('هل أنت متأكد من حذف هذا المصطلح؟')">
+    {% csrf_token %}
+    <button class="btn danger-outline" type="submit">🗑️ حذف</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="back-link">
+  <a class="btn outline" href="{% url 'service:glossary_list' %}">← العودة للقاموس</a>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // --- UI: keep selected style in sync ---
+  function syncVoiceSelectedUI() {
+    document.querySelectorAll('.voice-option').forEach(label => label.classList.remove('selected'));
+    const checked = document.querySelector('input[name="tts-voice"]:checked');
+    if (checked) checked.closest('.voice-option')?.classList.add('selected');
+  }
+  document.querySelectorAll('input[name="tts-voice"]').forEach(r => {
+    r.addEventListener('change', syncVoiceSelectedUI);
+  });
+  syncVoiceSelectedUI();
+
+  function getSelectedVoice() {
+    const checked = document.querySelector('input[name="tts-voice"]:checked');
+    return checked ? checked.value : 'female';
+  }
+
+  // Wrapper: calls your global function, but passes voice too (if supported)
+  function playGlossaryTTSWithVoice(termPk, mode) {
+    const voice = getSelectedVoice();
+
+    // If your global function accepts voice: playGlossaryTTS(pk, mode, voice)
+    if (typeof window.playGlossaryTTS === 'function') {
+      try {
+        // Try 3-args first
+        window.playGlossaryTTS(termPk, mode, voice);
+        return;
+      } catch (e) {
+        // fallback below
+      }
+
+      // fallback to 2 args (if you implemented voice reading inside playGlossaryTTS)
+      window.playGlossaryTTS(termPk, mode);
+      return;
+    }
+
+    // If you didn't add the function yet, show helpful message
+    alert('دالة playGlossaryTTS غير معرفة بعد. أضفها في ملف JS الخاص بالـ TTS.');
+  }
+</script>
+{% endblock %}

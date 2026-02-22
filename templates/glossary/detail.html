@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+{% block title %}{{ term.term }} | قاموس المصطلحات{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>{{ term.term }}</h1>
+  {% if term.pronunciation_hint %}
+    <p class="muted">تلميح نطق: <strong>{{ term.pronunciation_hint }}</strong></p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>التعريف</h2>
+
+  <p class="para">
+    {{ term.definition|linebreaksbr }}
+  </p>
+
+  <!-- Voice selector -->
+  <div class="tts-controls">
+    <span class="tts-controls-label">🔊 القراءة الصوتية:</span>
+    <div class="voice-selector" role="radiogroup" aria-label="اختيار الصوت">
+      <label class="voice-option selected">
+        <input type="radio" name="tts-voice" value="female" checked>
+        <span>👩 أنثى</span>
+      </label>
+      <label class="voice-option">
+        <input type="radio" name="tts-voice" value="male">
+        <span>👨 ذكر</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Glossary TTS (✅ URL comes from Django reverse) -->
+  <div class="row">
+    <button class="tts-btn"
+            type="button"
+            data-tts-url="{% url 'service:glossary_tts' term.pk %}"
+            onclick="playGlossaryTTSFromUrl(this, 'full')">
+      🔊 قراءة المصطلح والتعريف
+    </button>
+  </div>
+
+  <p class="hint">سيتم استخدام الصوت المختار (ذكر/أنثى) عند تشغيل القراءة.</p>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+
+<script>
+  // ---- UI: selected radio style ----
+  function syncVoiceSelectedUI() {
+    document.querySelectorAll('.voice-option').forEach(label => label.classList.remove('selected'));
+    const checked = document.querySelector('input[name="tts-voice"]:checked');
+    if (checked) checked.closest('.voice-option')?.classList.add('selected');
+  }
+  document.querySelectorAll('input[name="tts-voice"]').forEach(r => r.addEventListener('change', syncVoiceSelectedUI));
+  syncVoiceSelectedUI();
+
+  function getSelectedVoice() {
+    const checked = document.querySelector('input[name="tts-voice"]:checked');
+    return checked ? checked.value : 'female';
+  }
+
+  // ✅ Always uses the correct endpoint from Django, no hardcoded /service/ in JS
+  async function playGlossaryTTSFromUrl(button, mode='full') {
+    const url = button.getAttribute('data-tts-url');
+    const voice = getSelectedVoice();
+
+    if (!url) {
+      alert('مسار TTS غير موجود (data-tts-url).');
+      return;
+    }
+
+    // If your global tts.js has a helper to send & play:
+    // - we call it if exists
+    if (typeof window.fetchAndPlayTTS === 'function') {
+      window.fetchAndPlayTTS(url, { mode, voice }, button);
+      return;
+    }
+
+    // Minimal fallback if you don't have fetchAndPlayTTS:
+    try {
+      button.disabled = true;
+      const oldText = button.textContent;
+      button.textContent = '⏳ جاري التحميل...';
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''),
+        },
+        body: JSON.stringify({ mode, voice }),
+      });
+
+      const raw = await res.text();
+
+      if (!res.ok) {
+        console.error('TTS HTTP Error:', res.status, raw);
+        alert('حدث خطأ في السيرفر أثناء توليد الصوت. راجع Console.');
+        return;
+      }
+
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch (e) {
+        console.error('Expected JSON but got:', raw);
+        alert('السيرفر لم يُرجع JSON. راجع Console.');
+        return;
+      }
+
+      if (!data.success || !data.audio_url) {
+        console.error('Bad TTS response:', data);
+        alert(data.error || 'تعذر توليد الصوت.');
+        return;
+      }
+
+      const audio = new Audio(data.audio_url);
+      await audio.play();
+
+      // Optional: count play if you have endpoint
+      // fetch("{% url 'service:glossary_tts_played' term.pk %}", { method: 'POST', headers:{'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]')?.value || '')} });
+
+      button.textContent = oldText;
+    } catch (err) {
+      console.error('Glossary TTS Error:', err);
+      alert('حدث خطأ أثناء تشغيل الصوت.');
+    } finally {
+      button.disabled = false;
+      // restore text if changed
+      if (button.textContent.includes('جاري')) {
+        button.textContent = '🔊 قراءة المصطلح والتعريف';
+      }
+    }
+  }
+</script>
+
+{% endblock %}

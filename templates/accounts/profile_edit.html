@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% block title %}تعديل الملف الشخصي | منصة طيبة الصوتية{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <nav class="breadcrumb" aria-label="التنقل">
+    <a href="{% url 'accounts:profile' %}">الملف الشخصي</a>
+    <span class="separator">›</span>
+    <span>تعديل</span>
+  </nav>
+  <h1>تعديل الملف الشخصي</h1>
+  <p class="muted">قم بتحديث معلوماتك الشخصية.</p>
+</div>
+
+<!-- Profile Completion Hint -->
+{% if completion < 100 %}
+<div class="alert info">
+  <strong>💡 نصيحة:</strong> ملفك الشخصي مكتمل بنسبة {{ completion }}%. أكمل المعلومات الناقصة للحصول على تجربة أفضل.
+</div>
+{% endif %}
+
+<div class="card">
+  <form method="post" enctype="multipart/form-data" class="form">
+    {% csrf_token %}
+    
+    {{ form.non_field_errors }}
+    
+    <!-- Avatar Section -->
+    <div class="form-section avatar-section">
+      <h3 class="section-title">الصورة الشخصية</h3>
+      
+      <div class="avatar-upload">
+        <div class="current-avatar">
+          {% if request.user.avatar %}
+            <img src="{{ request.user.avatar.url }}" alt="صورتك الحالية">
+          {% else %}
+            <span class="avatar-initials large">{{ request.user.get_initials }}</span>
+          {% endif %}
+        </div>
+        <div class="avatar-input">
+          {{ form.avatar }}
+          <p class="field-hint">اختر صورة بصيغة JPG أو PNG. الحد الأقصى 2 ميجابايت.</p>
+          {{ form.avatar.errors }}
+        </div>
+      </div>
+    </div>
+    
+    <!-- Personal Info Section -->
+    <div class="form-section">
+      <h3 class="section-title">المعلومات الشخصية</h3>
+      
+      <div class="form-row">
+        <label for="{{ form.full_name_ar.id_for_label }}">{{ form.full_name_ar.label }}</label>
+        {{ form.full_name_ar }}
+        {{ form.full_name_ar.errors }}
+      </div>
+      
+      <div class="form-row">
+        <label for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+        {{ form.email }}
+        {{ form.email.errors }}
+      </div>
+      
+      <div class="form-grid-2">
+        <div class="form-row">
+          <label for="{{ form.gender.id_for_label }}">{{ form.gender.label }}</label>
+          {{ form.gender }}
+          {{ form.gender.errors }}
+        </div>
+        
+        <div class="form-row">
+          <label for="{{ form.birth_date.id_for_label }}">{{ form.birth_date.label }}</label>
+          {{ form.birth_date }}
+          {{ form.birth_date.errors }}
+        </div>
+      </div>
+      
+      <div class="form-row">
+        <label for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
+        {{ form.phone }}
+        {{ form.phone.errors }}
+      </div>
+      
+      <div class="form-row">
+        <label for="{{ form.bio.id_for_label }}">{{ form.bio.label }}</label>
+        {{ form.bio }}
+        {{ form.bio.errors }}
+        <p class="field-hint">حد أقصى 500 حرف.</p>
+      </div>
+    </div>
+    
+    <!-- Preferences Section -->
+    <div class="form-section">
+      <h3 class="section-title">التفضيلات</h3>
+      
+      <div class="form-row checkbox-row">
+        <label class="checkbox-label">
+          {{ form.receive_notifications }}
+          <span>{{ form.receive_notifications.label }}</span>
+        </label>
+        <p class="field-hint">سنرسل لك إشعارات عند الرد على استفساراتك.</p>
+      </div>
+    </div>
+    
+    <div class="form-actions">
+      <button class="btn primary" type="submit">💾 حفظ التغييرات</button>
+      <a class="btn outline" href="{% url 'accounts:profile' %}">إلغاء</a>
+    </div>
+  </form>
+</div>
+
+<div class="card danger-zone">
+  <h3>إعدادات الأمان</h3>
+  <p class="muted">تغيير كلمة المرور الخاصة بحسابك.</p>
+  <a href="{% url 'accounts:change_password' %}" class="btn danger-outline">🔒 تغيير كلمة المرور</a>
+</div>
+{% endblock %}

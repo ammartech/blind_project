@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% block title %}الملف الشخصي | منصة طيبة الصوتية{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>الملف الشخصي</h1>
+  <p class="muted">عرض وإدارة معلومات حسابك.</p>
+</div>
+
+<!-- Profile Header -->
+<div class="profile-header card">
+  <div class="profile-avatar-section">
+    <div class="profile-avatar">
+      {% if profile_user.avatar %}
+        <img src="{{ profile_user.avatar.url }}" alt="صورة {{ profile_user.get_display_name }}">
+      {% else %}
+        <span class="avatar-initials">{{ profile_user.get_initials }}</span>
+      {% endif %}
+    </div>
+    <div class="profile-info">
+      <h2 class="profile-name">{{ profile_user.get_display_name }}</h2>
+      <span class="badge {{ profile_user.role }}">{{ profile_user.get_role_display }}</span>
+      <p class="profile-username">@{{ profile_user.username }}</p>
+    </div>
+  </div>
+  
+  <div class="profile-actions">
+    <a href="{% url 'accounts:profile_edit' %}" class="btn primary">✏️ تعديل الملف الشخصي</a>
+    <a href="{% url 'accounts:change_password' %}" class="btn outline">🔒 تغيير كلمة المرور</a>
+  </div>
+</div>
+
+<!-- Profile Completion -->
+{% if completion < 100 %}
+<div class="card completion-card">
+  <div class="completion-header">
+    <h3>اكتمال الملف الشخصي</h3>
+    <span class="completion-percentage">{{ completion }}%</span>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill" style="width: {{ completion }}%"></div>
+  </div>
+  <p class="hint">أكمل ملفك الشخصي للحصول على تجربة أفضل.</p>
+  <a href="{% url 'accounts:profile_edit' %}" class="btn secondary small">إكمال الملف الشخصي</a>
+</div>
+{% endif %}
+
+<!-- Profile Details -->
+<div class="profile-details">
+  <div class="card">
+    <h3>المعلومات الشخصية</h3>
+    
+    <div class="info-grid">
+      <div class="info-item">
+        <span class="info-label">الاسم الكامل</span>
+        <span class="info-value">{{ profile_user.full_name_ar|default:"لم يُحدد" }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">اسم المستخدم</span>
+        <span class="info-value">{{ profile_user.username }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">البريد الإلكتروني</span>
+        <span class="info-value">{{ profile_user.email|default:"لم يُحدد" }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">الجنس</span>
+        <span class="info-value">{{ profile_user.get_gender_display|default:"لم يُحدد" }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">رقم الهاتف</span>
+        <span class="info-value" dir="ltr">{{ profile_user.phone|default:"لم يُحدد" }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">تاريخ الميلاد</span>
+        <span class="info-value">
+          {% if profile_user.birth_date %}
+            {{ profile_user.birth_date|date:"Y/m/d" }}
+          {% else %}
+            لم يُحدد
+          {% endif %}
+        </span>
+      </div>
+    </div>
+    
+    {% if profile_user.bio %}
+    <div class="info-item bio-item">
+      <span class="info-label">نبذة شخصية</span>
+      <p class="info-value bio-text">{{ profile_user.bio }}</p>
+    </div>
+    {% endif %}
+  </div>
+  
+  <div class="card">
+    <h3>معلومات الحساب</h3>
+    
+    <div class="info-grid">
+      <div class="info-item">
+        <span class="info-label">نوع الحساب</span>
+        <span class="info-value">
+          <span class="badge {{ profile_user.role }}">{{ profile_user.get_role_display }}</span>
+        </span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">تاريخ التسجيل</span>
+        <span class="info-value">{{ profile_user.date_joined|date:"Y/m/d" }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">آخر تحديث للملف</span>
+        <span class="info-value">{{ profile_user.profile_updated_at|date:"Y/m/d - H:i" }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">استلام الإشعارات</span>
+        <span class="info-value">
+          {% if profile_user.receive_notifications %}
+            <span class="status-active">✅ مفعّل</span>
+          {% else %}
+            <span class="status-inactive">❌ معطّل</span>
+          {% endif %}
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="back-link">
+  <a href="{% url 'service:dashboard' %}" class="btn outline">← العودة للوحة التحكم</a>
+</div>
+{% endblock %}

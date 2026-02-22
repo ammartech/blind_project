@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+{% block title %}إنشاء حساب | منصة طيبة الصوتية{% endblock %}
+
+{% block content %}
+<div class="auth">
+  <!-- Visual Side -->
+  <div class="auth-visual">
+    <div class="auth-visual-content">
+      <div class="auth-logo">
+        <span class="auth-logo-dot"></span>
+        طيبة
+      </div>
+      <h2>انضم إلى منصة طيبة الصوتية</h2>
+      <p>منصة متخصصة لخدمة المكفوفين في الوصول إلى مصادر المعلومات والمكتبات.</p>
+
+      <div class="auth-feature">
+        <span class="auth-feature-icon">🎯</span>
+        <div class="auth-feature-text">
+          <strong>سهولة التسجيل</strong>
+          <span>سجّل بالمعلومات الأساسية وأكمل ملفك لاحقاً</span>
+        </div>
+      </div>
+
+      <div class="auth-feature">
+        <span class="auth-feature-icon">🔊</span>
+        <div class="auth-feature-text">
+          <strong>دعم صوتي كامل</strong>
+          <span>قراءة صوتية لجميع المحتويات</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Form Side -->
+  <div class="auth-form-container">
+    <div class="auth-card">
+      <h1>إنشاء حساب جديد</h1>
+      <span class="muted">الحقول المميزة بـ (*) مطلوبة، والباقي يمكنك إكماله لاحقاً.</span>
+
+      <form method="post" class="form">
+        {% csrf_token %}
+
+        {# Errors summary #}
+        {% if form.errors %}
+          <div class="card" style="margin-top:12px">
+            <strong>تعذر إنشاء الحساب.</strong>
+            <div class="hint">يرجى مراجعة الأخطاء الظاهرة بالأسفل وتصحيحها.</div>
+            {{ form.non_field_errors }}
+          </div>
+        {% else %}
+          {{ form.non_field_errors }}
+        {% endif %}
+
+        <!-- Required Section -->
+        <div class="form-section">
+          <h3 class="section-title">المعلومات الأساسية (مطلوبة)</h3>
+
+          <div class="form-row">
+            <label for="{{ form.username.id_for_label }}">{{ form.username.label }}</label>
+            {{ form.username }}
+            {{ form.username.errors }}
+          </div>
+
+          <div class="form-row">
+            <label for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+            {{ form.email }}
+            {{ form.email.errors }}
+          </div>
+
+          <div class="form-row">
+            <label for="{{ form.password1.id_for_label }}">{{ form.password1.label }}</label>
+            {{ form.password1 }}
+            {{ form.password1.errors }}
+          </div>
+
+          <div class="form-row">
+            <label for="{{ form.password2.id_for_label }}">{{ form.password2.label }}</label>
+            {{ form.password2 }}
+            {{ form.password2.errors }}
+          </div>
+
+          {# ✅ FIX: role instead of user_type #}
+          <div class="form-row">
+            <label for="{{ form.role.id_for_label }}">{{ form.role.label }}</label>
+            {{ form.role }}
+            {{ form.role.errors }}
+            <p class="field-hint">
+              اختر "مستفيد (مكفوف)" إذا كنت من ذوي الإعاقة البصرية،
+              أو "أخصائي مكتبة" إذا كنت تعمل في المكتبة.
+            </p>
+          </div>
+        </div>
+
+        <!-- Optional Section (Collapsible) -->
+        <div class="form-section optional-section">
+          <button type="button" class="section-toggle" onclick="toggleOptional()">
+            <span class="toggle-icon" id="toggle-icon">▼</span>
+            معلومات إضافية (اختياري - يمكنك تخطيها)
+          </button>
+
+          <div class="optional-fields" id="optional-fields">
+            <p class="field-hint">هذه المعلومات تساعدنا في تقديم خدمة أفضل. يمكنك إضافتها الآن أو لاحقاً من صفحة الملف الشخصي.</p>
+
+            <div class="form-row">
+              <label for="{{ form.full_name_ar.id_for_label }}">{{ form.full_name_ar.label }}</label>
+              {{ form.full_name_ar }}
+              {{ form.full_name_ar.errors }}
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-row">
+                <label for="{{ form.gender.id_for_label }}">{{ form.gender.label }}</label>
+                {{ form.gender }}
+                {{ form.gender.errors }}
+              </div>
+
+              <div class="form-row">
+                <label for="{{ form.birth_date.id_for_label }}">{{ form.birth_date.label }}</label>
+                {{ form.birth_date }}
+                {{ form.birth_date.errors }}
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
+              {{ form.phone }}
+              {{ form.phone.errors }}
+            </div>
+          </div>
+        </div>
+
+        <button class="btn primary w-full" type="submit">إنشاء الحساب</button>
+      </form>
+
+      <div class="auth-footer">
+        لديك حساب بالفعل؟ <a href="{% url 'accounts:login' %}">تسجيل الدخول</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleOptional() {
+  const fields = document.getElementById('optional-fields');
+  const icon = document.getElementById('toggle-icon');
+
+  if (fields.classList.contains('show')) {
+    fields.classList.remove('show');
+    icon.textContent = '▼';
+  } else {
+    fields.classList.add('show');
+    icon.textContent = '▲';
+  }
+}
+</script>
+{% endblock %}

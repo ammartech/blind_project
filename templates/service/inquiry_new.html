@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}استفسار جديد | منصة طيبة الصوتية{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <nav class="breadcrumb" aria-label="التنقل">
+    <a href="{% url 'service:dashboard' %}">لوحة التحكم</a>
+    <span class="separator">›</span>
+    <span>استفسار جديد</span>
+  </nav>
+  <h1>إرسال استفسار جديد</h1>
+  <p class="muted">يمكنك كتابة سؤالك أو رفع ملف صوتي.</p>
+</div>
+
+<div class="card">
+  <form method="post" enctype="multipart/form-data" class="form">
+    {% csrf_token %}
+
+    {{ form.non_field_errors }}
+
+    <div class="form-row">
+      <label for="{{ form.title.id_for_label }}">عنوان الاستفسار *</label>
+      {{ form.title }}
+      {{ form.title.errors }}
+      <p class="field-hint">اكتب عنواناً مختصراً يصف سؤالك</p>
+    </div>
+
+    <div class="form-row">
+      <label for="{{ form.question_text.id_for_label }}">نص السؤال</label>
+      {{ form.question_text }}
+      {{ form.question_text.errors }}
+      <p class="field-hint">اكتب سؤالك هنا، أو يمكنك رفع ملف صوتي بدلاً من ذلك</p>
+    </div>
+
+    <div class="form-row">
+      <label for="{{ form.question_audio.id_for_label }}">ملف صوتي (اختياري)</label>
+      <div class="file-upload-wrapper">
+        {{ form.question_audio }}
+        <p class="field-hint">الملفات المدعومة: MP3, WAV, OGG, M4A, WebM (الحد الأقصى: 10 ميجابايت)</p>
+      </div>
+      {{ form.question_audio.errors }}
+    </div>
+
+    <div class="form-row">
+      <label for="{{ form.priority.id_for_label }}">الأولوية</label>
+      {{ form.priority }}
+      {{ form.priority.errors }}
+    </div>
+
+    <div class="form-actions">
+      <button class="btn primary" type="submit">إرسال الاستفسار</button>
+      <a class="btn outline" href="{% url 'service:dashboard' %}">إلغاء</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

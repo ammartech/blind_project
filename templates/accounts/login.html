@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}تسجيل الدخول | منصة طيبة الصوتية{% endblock %}
+
+{% block content %}
+<div class="auth">
+  <!-- Visual Side -->
+  <div class="auth-visual">
+    <div class="auth-visual-content">
+      <div class="auth-logo">
+        <span class="auth-logo-dot"></span>
+        طيبة
+      </div>
+      <h2>مرحباً بعودتك!</h2>
+      <p>سجّل دخولك للوصول إلى خدمات المنصة والاستفسارات الخاصة بك.</p>
+      
+      <div class="auth-feature">
+        <span class="auth-feature-icon">📚</span>
+        <div class="auth-feature-text">
+          <strong>خدمة الاستفسارات</strong>
+          <span>تواصل مع أخصائيي المكتبة</span>
+        </div>
+      </div>
+      
+      <div class="auth-feature">
+        <span class="auth-feature-icon">🔊</span>
+        <div class="auth-feature-text">
+          <strong>قاموس المصطلحات</strong>
+          <span>مصطلحات تخصصية مع قراءة صوتية</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Form Side -->
+  <div class="auth-form-container">
+    <div class="auth-card">
+      <h1>تسجيل الدخول</h1>
+      <span class="muted">أدخل بياناتك للوصول إلى حسابك.</span>
+      
+      <form method="post" class="form">
+        {% csrf_token %}
+        
+        {{ form.non_field_errors }}
+        
+        <div class="form-row">
+          <label for="{{ form.username.id_for_label }}">اسم المستخدم</label>
+          {{ form.username }}
+          {{ form.username.errors }}
+        </div>
+        
+        <div class="form-row">
+          <label for="{{ form.password.id_for_label }}">كلمة المرور</label>
+          {{ form.password }}
+          {{ form.password.errors }}
+        </div>
+        
+        <button class="btn primary w-full" type="submit">تسجيل الدخول</button>
+      </form>
+      
+      <div class="auth-footer">
+        ليس لديك حساب؟ <a href="{% url 'accounts:register' %}">إنشاء حساب جديد</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

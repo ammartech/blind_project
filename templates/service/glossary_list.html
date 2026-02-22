@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}قاموس المصطلحات | منصة طيبة الصوتية{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>قاموس المصطلحات</h1>
+  <p class="muted">ابحث عن مصطلحات تخصصية في علم المعلومات — مع قراءة صوتية عبر المتصفح.</p>
+</div>
+
+<div class="card">
+  <form method="get" class="search-row">
+    <input class="input" name="q" value="{{ q }}" placeholder="ابحث عن مصطلح..." aria-label="البحث في المصطلحات">
+    <button class="btn secondary" type="submit">🔍 بحث</button>
+    {% if q %}
+      <a class="btn outline" href="{% url 'service:glossary_list' %}">إلغاء البحث</a>
+    {% endif %}
+    {% if user.is_authenticated and user.is_librarian %}
+      <a class="btn primary" href="{% url 'service:glossary_new' %}">➕ إضافة مصطلح</a>
+    {% endif %}
+  </form>
+
+  {% if q %}
+    <p class="search-results-info">نتائج البحث عن: <strong>"{{ q }}"</strong></p>
+  {% endif %}
+
+  {% if terms %}
+    <div class="list-cards">
+      {% for t in terms %}
+        <a class="list-card" href="{% url 'service:glossary_detail' t.pk %}">
+          <div class="list-title">{{ t.term }}</div>
+          <div class="list-preview">{{ t.definition|truncatewords:20 }}</div>
+          <div class="list-meta">
+            <span>👁️ {{ t.view_count }}</span>
+            <span>🔊 {{ t.tts_play_count }}</span>
+            <span>اضغط للتفاصيل</span>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+    
+    <!-- الصفحات -->
+    {% if terms.has_other_pages %}
+    <nav class="pagination" aria-label="التنقل بين الصفحات">
+      {% if terms.has_previous %}
+        <a class="page-link" href="?page={{ terms.previous_page_number }}{% if q %}&q={{ q }}{% endif %}">السابق</a>
+      {% endif %}
+      
+      <span class="page-info">صفحة {{ terms.number }} من {{ terms.paginator.num_pages }}</span>
+      
+      {% if terms.has_next %}
+        <a class="page-link" href="?page={{ terms.next_page_number }}{% if q %}&q={{ q }}{% endif %}">التالي</a>
+      {% endif %}
+    </nav>
+    {% endif %}
+  {% else %}
+    <div class="empty-state">
+      <p class="muted">لا توجد نتائج.</p>
+      {% if user.is_authenticated and user.is_librarian %}
+        <a class="btn primary" href="{% url 'service:glossary_new' %}">أضف أول مصطلح</a>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

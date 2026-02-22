@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}إغلاق الاستفسار | منصة طيبة الصوتية{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>إغلاق الاستفسار</h1>
+</div>
+
+<div class="card">
+  <div class="confirmation-message">
+    <p>هل أنت متأكد من إغلاق هذا الاستفسار؟</p>
+    <p class="inquiry-title"><strong>{{ inquiry.title }}</strong></p>
+  </div>
+  
+  <form method="post" class="form">
+    {% csrf_token %}
+    <div class="form-actions">
+      <button class="btn danger" type="submit">نعم، أغلق الاستفسار</button>
+      <a class="btn outline" href="{% url 'service:inquiry_detail' inquiry.pk %}">إلغاء</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

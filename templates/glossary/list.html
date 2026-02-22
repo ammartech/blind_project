@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}قاموس المصطلحات | منصة طيبة الصوتية{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>قاموس المصطلحات</h1>
+  <p class="muted">ابحث عن مصطلحات تخصصية في علم المعلومات — مع قراءة صوتية عبر المتصفح.</p>
+</div>
+
+<div class="card">
+  <form method="get" class="search-row">
+    <input class="input" name="q" value="{{ q }}" placeholder="ابحث عن مصطلح...">
+    <button class="btn secondary" type="submit">بحث</button>
+    {% if user.is_authenticated and user.is_librarian %}
+      <a class="btn primary" href="{% url 'glossary:new' %}">إضافة مصطلح</a>
+    {% endif %}
+  </form>
+
+  {% if terms %}
+    <div class="list-cards">
+      {% for t in terms %}
+        <a class="list-card" href="{% url 'glossary:detail' t.pk %}">
+          <div class="list-title">{{ t.term }}</div>
+          <div class="list-meta">اضغط لعرض التعريف وتشغيل النطق 🔊</div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted">لا توجد نتائج.</p>
+  {% endif %}
+</div>
+{% endblock %}

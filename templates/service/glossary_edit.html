@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}تعديل: {{ term.term }} | قاموس المصطلحات{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <nav class="breadcrumb" aria-label="التنقل">
+    <a href="{% url 'service:glossary_list' %}">قاموس المصطلحات</a>
+    <span class="separator">›</span>
+    <a href="{% url 'service:glossary_detail' term.pk %}">{{ term.term }}</a>
+    <span class="separator">›</span>
+    <span>تعديل</span>
+  </nav>
+  <h1>تعديل المصطلح</h1>
+</div>
+
+<div class="card">
+  <form method="post" class="form">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    
+    <div class="form-row">
+      <label for="{{ form.term.id_for_label }}">المصطلح *</label>
+      {{ form.term }}
+      {{ form.term.errors }}
+    </div>
+    
+    <div class="form-row">
+      <label for="{{ form.definition.id_for_label }}">التعريف *</label>
+      {{ form.definition }}
+      {{ form.definition.errors }}
+    </div>
+    
+    <div class="form-row">
+      <label for="{{ form.pronunciation_hint.id_for_label }}">تلميح النطق (اختياري)</label>
+      {{ form.pronunciation_hint }}
+      {{ form.pronunciation_hint.errors }}
+    </div>
+    
+    <div class="form-actions">
+      <button class="btn primary" type="submit">حفظ التعديلات</button>
+      <a class="btn outline" href="{% url 'service:glossary_detail' term.pk %}">إلغاء</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

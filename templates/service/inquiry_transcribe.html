@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}تحويل السؤال إلى نص | منصة طيبة الصوتية{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>تحويل السؤال إلى نص</h1>
+  <p class="muted">وضع تجريبي: استمع إلى التسجيل ثم اكتب نص السؤال.</p>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2>التسجيل</h2>
+    {% if inquiry.question_audio %}
+      <audio controls src="{{ inquiry.question_audio.url }}"></audio>
+    {% else %}
+      <p class="muted">لا يوجد ملف صوتي.</p>
+    {% endif %}
+    <p class="hint">بعد الحفظ ستصبح الحالة "تم تحويله لنص".</p>
+  </div>
+
+  <div class="card">
+    <h2>نص السؤال</h2>
+    <form method="post" class="form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="form-row">
+        <label>النص</label>
+        {{ form.transcription_text }}
+        {{ form.transcription_text.errors }}
+      </div>
+      <button class="btn primary" type="submit">حفظ</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,103 @@
+{% load static %}
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}منصة صوتية لدعم المكفوفين{% endblock %}</title>
+
+  <!-- IBM Plex (Arabic) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="{% static 'css/main.css' %}">
+  <script defer src="{% static 'js/tts.js' %}"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">تخطي إلى المحتوى</a>
+
+  <header class="site-header">
+    <nav class="navbar container">
+      <a class="brand" href="{% url 'core:home' %}">
+        <span class="brand-dot" aria-hidden="true"></span>
+        <span>منصة طيبة الصوتية</span>
+      </a>
+
+      <button class="nav-toggle" aria-label="فتح القائمة" aria-expanded="false" data-nav-toggle>☰</button>
+
+      <ul class="nav-links" data-nav>
+        <li><a href="{% url 'core:home' %}">الرئيسية</a></li>
+        <li><a href="{% url 'core:services' %}">الخدمات</a></li>
+        <li><a href="{% url 'glossary:list' %}">قاموس المصطلحات</a></li>
+        <li><a href="{% url 'core:about' %}">من نحن</a></li>
+        <li><a href="{% url 'core:contact' %}">تواصل</a></li>
+        {% if user.is_authenticated %}
+          <li><a class="pill" href="{% url 'service:dashboard' %}">لوحة التحكم</a></li>
+          <li>
+            <form method="post" action="{% url 'accounts:logout' %}">
+              {% csrf_token %}
+              <button class="linklike" type="submit">خروج</button>
+            </form>
+          </li>
+        {% else %}
+          <li><a class="pill" href="{% url 'accounts:login' %}">دخول</a></li>
+          <li><a class="pill outline" href="{% url 'accounts:register' %}">تسجيل</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </header>
+
+  {% if messages %}
+    <div class="container">
+      {% for message in messages %}
+        <div class="alert {{ message.tags }}">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <main id="main" class="container main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <h3>من نحن</h3>
+        <p>
+          منصة صوتية رقمية لدعم خدمات المعلومات للمكفوفين في المكتبات الجامعية — دراسة تطبيقية على جامعة طيبة.
+          نحول صوت المستفيد إلى نص، ثم يجيب أخصائي المكتبة نصيًا، ويعود الرد بصوت واضح للمستفيد.
+        </p>
+      </div>
+      <div>
+        <h3>روابط سريعة</h3>
+        <ul class="footer-links">
+          <li><a href="{% url 'core:services' %}">الخدمات</a></li>
+          <li><a href="{% url 'glossary:list' %}">قاموس المصطلحات</a></li>
+          <li><a href="{% url 'core:about' %}">من نحن</a></li>
+          <li><a href="{% url 'core:contact' %}">تواصل</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>إتاحة الوصول</h3>
+        <p>يمكنك تشغيل قراءة صوتية لأي نص عبر زر (🔊) بجوار الفقرات — باستخدام قارئ المتصفح.</p>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <small>© {% now "Y" %} منصة طيبة الصوتية — جميع الحقوق محفوظة</small>
+    </div>
+  </footer>
+
+  <script>
+    // Simple responsive nav toggle
+    const btn = document.querySelector('[data-nav-toggle]');
+    const nav = document.querySelector('[data-nav]');
+    if (btn && nav) {
+      btn.addEventListener('click', () => {
+        const open = nav.classList.toggle('open');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+    }
+  </script>
+</body>
+</html>

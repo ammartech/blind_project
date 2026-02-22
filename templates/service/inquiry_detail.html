@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+{% block title %}{{ inquiry.title }} | منصة طيبة الصوتية{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <nav class="breadcrumb" aria-label="التنقل">
+    <a href="{% url 'service:dashboard' %}">لوحة التحكم</a>
+    <span class="separator">›</span>
+    <span>تفاصيل الاستفسار</span>
+  </nav>
+  <h1>{{ inquiry.title }}</h1>
+  <div class="meta-badges">
+    <span class="badge {{ inquiry.status_badge_class }}">{{ inquiry.get_status_display }}</span>
+    <span class="badge {{ inquiry.priority_badge_class }}">{{ inquiry.get_priority_display }}</span>
+    <span class="meta-date">{{ inquiry.created_at|date:"Y/m/d - H:i" }}</span>
+  </div>
+</div>
+
+<div class="inquiry-detail">
+  <!-- معلومات السؤال -->
+  <div class="card">
+    <h2>السؤال</h2>
+
+    {% if inquiry.question_audio %}
+      <div class="audio-player">
+        <audio controls preload="metadata">
+          <source src="{{ inquiry.question_audio.url }}" type="audio/mpeg">
+          متصفحك لا يدعم تشغيل الصوت.
+        </audio>
+        <p class="hint">🎤 ملف صوتي مرفق</p>
+      </div>
+    {% endif %}
+
+    {% if inquiry.transcription_text %}
+      <div class="question-text">
+        <h3>النص المفرغ</h3>
+        <p class="para">{{ inquiry.transcription_text|linebreaksbr }}</p>
+        <button class="tts-btn" data-tts="{{ inquiry.transcription_text|escapejs }}" aria-label="قراءة السؤال">
+          🔊 قراءة السؤال
+        </button>
+      </div>
+    {% elif inquiry.question_text %}
+      <div class="question-text">
+        <p class="para">{{ inquiry.question_text|linebreaksbr }}</p>
+        <button class="tts-btn" data-tts="{{ inquiry.question_text|escapejs }}" aria-label="قراءة السؤال">
+          🔊 قراءة السؤال
+        </button>
+      </div>
+    {% endif %}
+
+    <div class="meta-info">
+      <span>أرسله: <strong>{{ inquiry.created_by.username }}</strong></span>
+      <span>بتاريخ: <strong>{{ inquiry.created_at|date:"Y/m/d - H:i" }}</strong></span>
+    </div>
+  </div>
+
+  <!-- الإجابة -->
+  {% if inquiry.answer_text %}
+  <div class="card answer-card">
+    <h2>الإجابة</h2>
+    <p class="para">{{ inquiry.answer_text|linebreaksbr }}</p>
+    <button class="tts-btn" data-tts="{{ inquiry.answer_text|escapejs }}" aria-label="قراءة الإجابة">
+      🔊 قراءة الإجابة
+    </button>
+    <div class="meta-info">
+      <span>أجاب عليه: <strong>{{ inquiry.answered_by.username }}</strong></span>
+      <span>بتاريخ: <strong>{{ inquiry.answered_at|date:"Y/m/d - H:i" }}</strong></span>
+      {% if inquiry.response_time %}
+        <span>وقت الاستجابة: <strong>{{ inquiry.response_time }} ساعة</strong></span>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ملاحظات داخلية (للأخصائيين فقط) -->
+  {% if is_librarian and inquiry.internal_notes %}
+  <div class="card internal-notes">
+    <h2>📝 ملاحظات داخلية</h2>
+    <p class="para">{{ inquiry.internal_notes|linebreaksbr }}</p>
+  </div>
+  {% endif %}
+
+  <!-- أزرار الإجراءات -->
+  <div class="actions-card">
+    {% if is_librarian %}
+      {% if inquiry.status == 'new' and inquiry.question_audio %}
+        <a class="btn primary" href="{% url 'service:inquiry_transcribe' inquiry.pk %}">
+          ✍️ تفريغ السؤال
+        </a>
+      {% endif %}
+
+      {% if inquiry.status in 'new,transcribed,in_progress' %}
+        <a class="btn success" href="{% url 'service:inquiry_answer' inquiry.pk %}">
+          ✅ كتابة الإجابة
+        </a>
+      {% endif %}
+
+      {% if inquiry.status == 'answered' %}
+        <a class="btn outline" href="{% url 'service:inquiry_answer' inquiry.pk %}">
+          ✏️ تعديل الإجابة
+        </a>
+      {% endif %}
+
+      {% if inquiry.status != 'closed' %}
+        <a class="btn danger-outline" href="{% url 'service:inquiry_close' inquiry.pk %}">
+          🔒 إغلاق
+        </a>
+      {% endif %}
+    {% else %}
+      {% if inquiry.status == 'closed' %}
+        <p class="muted">هذا الاستفسار مغلق.</p>
+      {% elif inquiry.status == 'answered' %}
+        <p class="success-text">✅ تمت الإجابة على استفسارك.</p>
+      {% else %}
+        <p class="muted">⏳ استفسارك قيد المعالجة...</p>
+      {% endif %}
+    {% endif %}
+
+    <a class="btn secondary" href="{% url 'service:dashboard' %}">← العودة للوحة التحكم</a>
+  </div>
+</div>
+
+<p class="hint">ملاحظة: القراءة الصوتية تعتمد على محرك المتصفح (SpeechSynthesis).</p>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.tts-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const text = this.dataset.tts;
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ar-SA';
+      utterance.rate = 0.9;
+      speechSynthesis.speak(utterance);
+    } else {
+      alert('متصفحك لا يدعم القراءة الصوتية.');
+    }
+  });
+});
+</script>
+{% endblock %}

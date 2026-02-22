@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block title %}الرئيسية | منصة طيبة الصوتية{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="hero-card">
+    <p class="badge" style="color: #ffffff;">❤️ تعاطف • 💙 ثقة • 🤲 ذهبي عالي التباين • 🤍 إتاحة</p>
+    <h1 style="color: #ffffff;">منصة صوتية رقمية لدعم خدمات المعلومات للمكفوفين في المكتبات الجامعية</h1>
+    <p class="lead" style="color: rgba(255, 255, 255, 0.92);">
+      خدمة مبسّطة: <strong>صوت → نص → رد نصي → صوت</strong>.
+      اطرح سؤالك صوتيًا، وسيجيبك أخصائي المكتبة.
+      <button class="tts-btn" data-tts="خدمة مبسّطة: صوت ثم نص ثم رد نصي ثم صوت. اطرح سؤالك صوتيًا وسيجيبك أخصائي المكتبة." aria-label="قراءة النص">🔊</button>
+    </p>
+    <div class="cta-row">
+      {% if user.is_authenticated %}
+        <a class="btn primary" href="{% url 'service:dashboard' %}">اذهب للوحة التحكم</a>
+      {% else %}
+        <a class="btn primary" href="{% url 'accounts:register' %}">ابدأ الآن</a>
+        <a class="btn secondary" href="{% url 'accounts:login' %}">تسجيل الدخول</a>
+      {% endif %}
+      <a class="btn ghost" href="{% url 'glossary:list' %}">تصفح قاموس المصطلحات</a>
+    </div>
+  </div>
+  <div class="hero-side">
+    <div class="stat">
+      <div class="stat-num">2</div>
+      <div class="stat-label">أدوار مستخدمين<br>مكفوف / أخصائي مكتبة</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">5</div>
+      <div class="stat-label">صفحات واجهة<br>جاهزة ومترابطة</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">RTL</div>
+      <div class="stat-label">واجهة عربية<br>مهيأة</div>
+    </div>
+  </div>
+</section>
+<section class="grid-3">
+  <article class="card">
+    <h2>للـمكفوفين</h2>
+    <p>أرسل سؤالاً بصوتك أو بنص، وتابع الردود داخل لوحة التحكم.</p>
+  </article>
+  <article class="card">
+    <h2>لأخصائي المكتبة</h2>
+    <p>استقبل الاستفسارات، حولها إلى نص (عند الحاجة)، ثم أرسل الإجابة.</p>
+  </article>
+  <article class="card">
+    <h2>قاموس المصطلحات</h2>
+    <p>قاعدة بيانات بمصطلحات تخصصية في علم المعلومات مع نطق صوتي عبر المتصفح.</p>
+  </article>
+</section>
+{% endblock %}
