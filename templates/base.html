@@ -12,7 +12,9 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="{% static 'css/main.css' %}">
+  {% block extra_css %}{% endblock %}
   <script defer src="{% static 'js/tts.js' %}"></script>
+  {% block extra_js %}{% endblock %}
 </head>
 <body>
   <a class="skip-link" href="#main">تخطي إلى المحتوى</a>

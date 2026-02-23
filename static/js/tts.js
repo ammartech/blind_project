@@ -23,9 +23,10 @@
  *    </button>
  */
 
-// Global audio element
+// Global audio state
 let currentAudio = null;
 let isPlaying = false;
+let lastAudioUrl = null; // Track last URL for download feature
 
 /**
  * Get CSRF token from cookies
@@ -89,21 +90,27 @@ async function playTTS(text, voice = null, button = null) {
     }
     
     try {
+        const speed = getSelectedSpeed();
         const response = await fetch('/service/tts/synthesize/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCSRFToken()
             },
-            body: JSON.stringify({ text, voice })
+            body: JSON.stringify({ text, voice, speed })
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
-            // Create and play audio
+            lastAudioUrl = data.audio_url;
             currentAudio = new Audio(data.audio_url);
-            
+
+            // Apply playback rate for fast speed
+            if (speed === 'fast') {
+                currentAudio.playbackRate = 1.3;
+            }
+
             currentAudio.onplay = () => {
                 isPlaying = true;
                 if (button) {
@@ -113,7 +120,7 @@ async function playTTS(text, voice = null, button = null) {
                     button.disabled = false;
                 }
             };
-            
+
             currentAudio.onended = () => {
                 isPlaying = false;
                 if (button) {
@@ -121,32 +128,36 @@ async function playTTS(text, voice = null, button = null) {
                     button.classList.remove('playing');
                 }
             };
-            
+
             currentAudio.onerror = () => {
-                console.error('Audio playback error');
+                console.error('Audio playback error, falling back to browser TTS');
                 isPlaying = false;
                 if (button) {
                     button.innerHTML = originalHTML;
                     button.classList.remove('loading', 'playing');
                     button.disabled = false;
                 }
+                // Fallback to browser Speech Synthesis
+                playBrowserTTS(text, voice, speed);
             };
-            
+
             await currentAudio.play();
-            
+
         } else {
             throw new Error(data.error || 'فشل في إنشاء الصوت');
         }
-        
+
     } catch (error) {
-        console.error('TTS Error:', error);
-        alert('حدث خطأ في القراءة الصوتية: ' + error.message);
-        
+        console.error('TTS Error:', error.message, '- trying browser fallback');
+
         if (button) {
             button.innerHTML = originalHTML;
             button.classList.remove('loading', 'playing');
             button.disabled = false;
         }
+
+        // Fallback to browser Speech Synthesis API
+        playBrowserTTS(text, voice, getSelectedSpeed());
     }
 }
 
@@ -425,6 +436,7 @@ async function playGlossaryTTSFromUrl(button, mode='full') {
             return;
         }
 
+        lastAudioUrl = data.audio_url;
         const audio = new Audio(data.audio_url);
         await audio.play();
 
@@ -432,4 +444,96 @@ async function playGlossaryTTSFromUrl(button, mode='full') {
         console.error("Glossary TTS Error:", err);
         alert("حدث خطأ أثناء تشغيل الصوت.");
     }
+}
+
+/**
+ * Get selected speed from radio buttons or select
+ */
+function getSelectedSpeed() {
+    const selected = document.querySelector('input[name="tts-speed"]:checked');
+    if (selected) return selected.value;
+    const sel = document.querySelector('select[name="tts-speed"]');
+    if (sel) return sel.value;
+    return 'normal';
+}
+
+/**
+ * Browser-based TTS fallback using Web Speech API
+ */
+function playBrowserTTS(text, voice = 'female', speed = 'normal') {
+    if (!('speechSynthesis' in window)) {
+        alert('المتصفح لا يدعم القراءة الصوتية. يرجى استخدام متصفح حديث.');
+        return;
+    }
+
+    // Cancel any ongoing speech
+    speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ar';
+
+    // Speed mapping
+    const speedMap = { slow: 0.7, normal: 1.0, fast: 1.4 };
+    utterance.rate = speedMap[speed] || 1.0;
+
+    // Try to find an Arabic voice
+    const voices = speechSynthesis.getVoices();
+    const arVoice = voices.find(v => v.lang.startsWith('ar'));
+    if (arVoice) {
+        utterance.voice = arVoice;
+    }
+
+    utterance.onend = () => {
+        isPlaying = false;
+        document.querySelectorAll('.tts-btn.playing').forEach(btn => {
+            btn.classList.remove('playing');
+        });
+    };
+
+    speechSynthesis.speak(utterance);
+    isPlaying = true;
+}
+
+/**
+ * Download the last played audio file
+ */
+function downloadLastAudio() {
+    if (!lastAudioUrl) {
+        alert('لا يوجد ملف صوتي للتحميل. قم بتشغيل القراءة الصوتية أولاً.');
+        return;
+    }
+
+    const link = document.createElement('a');
+    link.href = lastAudioUrl;
+    link.download = 'tts_audio.mp3';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+/**
+ * Repeat last audio playback
+ */
+function repeatLastAudio() {
+    if (!lastAudioUrl) {
+        alert('لا يوجد ملف صوتي لإعادة تشغيله.');
+        return;
+    }
+
+    stopTTS();
+    currentAudio = new Audio(lastAudioUrl);
+    const speed = getSelectedSpeed();
+    if (speed === 'fast') {
+        currentAudio.playbackRate = 1.3;
+    }
+
+    currentAudio.onplay = () => { isPlaying = true; };
+    currentAudio.onended = () => {
+        isPlaying = false;
+        document.querySelectorAll('.tts-btn.playing').forEach(btn => {
+            btn.classList.remove('playing');
+        });
+    };
+
+    currentAudio.play();
 }
