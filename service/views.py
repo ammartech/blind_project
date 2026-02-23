@@ -403,6 +403,7 @@ def tts_synthesize(request):
 
         text = data.get('text', '').strip()
         voice = data.get('voice', 'female')
+        speed = data.get('speed', 'normal')
 
         # Validation
         if not text:
@@ -414,6 +415,9 @@ def tts_synthesize(request):
         if voice not in ['male', 'female']:
             voice = 'female'
 
+        if speed not in ['slow', 'normal', 'fast']:
+            speed = 'normal'
+
         if len(text) > 2000:
             return JsonResponse({
                 'success': False,
@@ -422,13 +426,14 @@ def tts_synthesize(request):
 
         # Generate speech
         tts = get_tts_service()
-        audio_path = tts.synthesize(text, voice)
+        audio_path = tts.synthesize(text, voice, speed)
         audio_url = get_audio_url(audio_path)
 
         return JsonResponse({
             'success': True,
             'audio_url': audio_url,
-            'voice': voice
+            'voice': voice,
+            'speed': speed,
         })
 
     except Exception as e:
