@@ -30,4 +30,7 @@ urlpatterns = [
     path('tts/voices/', views.tts_voices, name='tts_voices'),
     path('inquiry/<int:pk>/tts/', views.tts_inquiry_answer, name='tts_inquiry_answer'),
     path('glossary/<int:pk>/tts/', views.tts_glossary_term, name='tts_glossary_term'),
+
+    # Alias so {% url 'service:glossary_tts' pk %} also resolves
+    path('glossary/<int:pk>/tts-audio/', views.tts_glossary_term, name='glossary_tts'),
 ]

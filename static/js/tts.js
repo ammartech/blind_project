@@ -1,539 +1,392 @@
 /**
  * Arabic TTS Player - مشغل القراءة الصوتية
  * static/js/tts.js
- * 
- * Usage in templates:
- * 
- * 1. Include this script in base.html:
- *    <script src="{% static 'js/tts.js' %}"></script>
- * 
- * 2. Add TTS buttons:
- *    <button class="tts-btn" onclick="playTTS('مرحباً بكم', 'female')">
- *      🔊 استماع
- *    </button>
- * 
- * 3. For glossary terms:
- *    <button onclick="playGlossaryTTS({{ term.pk }}, 'full', 'female')">
- *      🔊 قراءة المصطلح
- *    </button>
- * 
- * 4. For inquiry answers:
- *    <button onclick="playInquiryTTS({{ inquiry.pk }}, 'female')">
- *      🔊 استماع للإجابة
- *    </button>
+ *
+ * Supports:
+ *   - AI engine (edge-tts / gTTS backend)
+ *   - Browser engine (Web Speech API fallback)
+ *   - Voice selection (male / female)
+ *   - Speed control (slow / normal / fast)
  */
 
-// Global audio state
+// ──── Global State ────
 let currentAudio = null;
 let isPlaying = false;
-let lastAudioUrl = null; // Track last URL for download feature
+let lastAudioUrl = null;
 
-/**
- * Get CSRF token from cookies
- */
+// ──── Helpers ────
+
 function getCSRFToken() {
-    const name = 'csrftoken';
-    const cookies = document.cookie.split(';');
-    for (let cookie of cookies) {
-        cookie = cookie.trim();
-        if (cookie.startsWith(name + '=')) {
-            return decodeURIComponent(cookie.substring(name.length + 1));
-        }
+    for (let c of document.cookie.split(';')) {
+        c = c.trim();
+        if (c.startsWith('csrftoken=')) return decodeURIComponent(c.substring(10));
     }
     return '';
 }
 
-/**
- * Get selected voice from radio buttons
- */
 function getSelectedVoice() {
-    const selected = document.querySelector('input[name="tts-voice"]:checked');
-    return selected ? selected.value : 'female';
+    const el = document.querySelector('input[name="tts-voice"]:checked');
+    return el ? el.value : 'female';
 }
 
-/**
- * Play TTS for any Arabic text
- * 
- * @param {string} text - Arabic text to speak
- * @param {string} voice - 'male' or 'female' (optional, uses selected if not provided)
- * @param {HTMLElement} button - Optional button element to show loading state
- */
-async function playTTS(text, voice = null, button = null) {
-    // Get voice from parameter or selection
-    voice = voice || getSelectedVoice();
-    
-    // Get button from event if not passed
-    if (!button && event && event.target) {
-        button = event.target.closest('.tts-btn');
-    }
-    
-    // Stop current audio if playing
-    if (currentAudio && isPlaying) {
-        currentAudio.pause();
-        currentAudio = null;
-        isPlaying = false;
-        
-        // Reset button state
-        document.querySelectorAll('.tts-btn.playing').forEach(btn => {
-            btn.classList.remove('playing');
-        });
-        return;
-    }
-    
-    // Show loading state
-    let originalHTML = '';
-    if (button) {
-        originalHTML = button.innerHTML;
-        button.innerHTML = '<span class="tts-loading">⏳</span> جاري التحميل...';
-        button.disabled = true;
-        button.classList.add('loading');
-    }
-    
-    try {
-        const speed = getSelectedSpeed();
-        const response = await fetch('/service/tts/synthesize/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
-            },
-            body: JSON.stringify({ text, voice, speed })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            lastAudioUrl = data.audio_url;
-            currentAudio = new Audio(data.audio_url);
-
-            // Apply playback rate for fast speed
-            if (speed === 'fast') {
-                currentAudio.playbackRate = 1.3;
-            }
-
-            currentAudio.onplay = () => {
-                isPlaying = true;
-                if (button) {
-                    button.innerHTML = '⏹️ إيقاف';
-                    button.classList.remove('loading');
-                    button.classList.add('playing');
-                    button.disabled = false;
-                }
-            };
-
-            currentAudio.onended = () => {
-                isPlaying = false;
-                if (button) {
-                    button.innerHTML = originalHTML;
-                    button.classList.remove('playing');
-                }
-            };
-
-            currentAudio.onerror = () => {
-                console.error('Audio playback error, falling back to browser TTS');
-                isPlaying = false;
-                if (button) {
-                    button.innerHTML = originalHTML;
-                    button.classList.remove('loading', 'playing');
-                    button.disabled = false;
-                }
-                // Fallback to browser Speech Synthesis
-                playBrowserTTS(text, voice, speed);
-            };
-
-            await currentAudio.play();
-
-        } else {
-            throw new Error(data.error || 'فشل في إنشاء الصوت');
-        }
-
-    } catch (error) {
-        console.error('TTS Error:', error.message, '- trying browser fallback');
-
-        if (button) {
-            button.innerHTML = originalHTML;
-            button.classList.remove('loading', 'playing');
-            button.disabled = false;
-        }
-
-        // Fallback to browser Speech Synthesis API
-        playBrowserTTS(text, voice, getSelectedSpeed());
-    }
-}
-
-/**
- * Play TTS for glossary term
- * 
- * @param {number} termId - Glossary term ID
- * @param {string} type - 'term', 'definition', or 'full'
- * @param {string} voice - 'male' or 'female' (optional)
- */
-async function playGlossaryTTS(termId, type = 'full', voice = null) {
-    voice = voice || getSelectedVoice();
-    const button = event?.target?.closest('.tts-btn');
-    
-    // Stop current audio if playing
-    if (currentAudio && isPlaying) {
-        currentAudio.pause();
-        currentAudio = null;
-        isPlaying = false;
-        document.querySelectorAll('.tts-btn.playing').forEach(btn => {
-            btn.classList.remove('playing');
-        });
-        return;
-    }
-    
-    // Show loading
-    let originalHTML = '';
-    if (button) {
-        originalHTML = button.innerHTML;
-        button.innerHTML = '<span class="tts-loading">⏳</span> جاري التحميل...';
-        button.disabled = true;
-        button.classList.add('loading');
-    }
-    
-    try {
-        const formData = new FormData();
-        formData.append('type', type);
-        formData.append('voice', voice);
-        
-        const response = await fetch(`/service/glossary/${termId}/tts/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCSRFToken()
-            },
-            body: formData
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            currentAudio = new Audio(data.audio_url);
-            
-            currentAudio.onplay = () => {
-                isPlaying = true;
-                if (button) {
-                    button.innerHTML = '⏹️ إيقاف';
-                    button.classList.remove('loading');
-                    button.classList.add('playing');
-                    button.disabled = false;
-                }
-            };
-            
-            currentAudio.onended = () => {
-                isPlaying = false;
-                if (button) {
-                    button.innerHTML = originalHTML;
-                    button.classList.remove('playing');
-                }
-            };
-            
-            await currentAudio.play();
-            
-            // Update play count display if exists
-            const countEl = document.querySelector('.tts-play-count .count');
-            if (countEl && data.play_count) {
-                countEl.textContent = data.play_count;
-            }
-            
-        } else {
-            throw new Error(data.error || 'فشل في إنشاء الصوت');
-        }
-        
-    } catch (error) {
-        console.error('Glossary TTS Error:', error);
-        alert('حدث خطأ: ' + error.message);
-        
-        if (button) {
-            button.innerHTML = originalHTML;
-            button.classList.remove('loading', 'playing');
-            button.disabled = false;
-        }
-    }
-}
-
-/**
- * Play TTS for inquiry answer
- * 
- * @param {number} inquiryId - Inquiry ID
- * @param {string} voice - 'male' or 'female' (optional)
- */
-async function playInquiryTTS(inquiryId, voice = null) {
-    voice = voice || getSelectedVoice();
-    const button = event?.target?.closest('.tts-btn');
-    
-    // Stop current audio if playing
-    if (currentAudio && isPlaying) {
-        currentAudio.pause();
-        currentAudio = null;
-        isPlaying = false;
-        document.querySelectorAll('.tts-btn.playing').forEach(btn => {
-            btn.classList.remove('playing');
-        });
-        return;
-    }
-    
-    let originalHTML = '';
-    if (button) {
-        originalHTML = button.innerHTML;
-        button.innerHTML = '<span class="tts-loading">⏳</span> جاري التحميل...';
-        button.disabled = true;
-        button.classList.add('loading');
-    }
-    
-    try {
-        const formData = new FormData();
-        formData.append('voice', voice);
-        
-        const response = await fetch(`/service/inquiry/${inquiryId}/tts/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCSRFToken()
-            },
-            body: formData
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            currentAudio = new Audio(data.audio_url);
-            
-            currentAudio.onplay = () => {
-                isPlaying = true;
-                if (button) {
-                    button.innerHTML = '⏹️ إيقاف';
-                    button.classList.remove('loading');
-                    button.classList.add('playing');
-                    button.disabled = false;
-                }
-            };
-            
-            currentAudio.onended = () => {
-                isPlaying = false;
-                if (button) {
-                    button.innerHTML = originalHTML;
-                    button.classList.remove('playing');
-                }
-            };
-            
-            await currentAudio.play();
-            
-        } else {
-            throw new Error(data.error || 'فشل في إنشاء الصوت');
-        }
-        
-    } catch (error) {
-        console.error('Inquiry TTS Error:', error);
-        alert('حدث خطأ: ' + error.message);
-        
-        if (button) {
-            button.innerHTML = originalHTML;
-            button.classList.remove('loading', 'playing');
-            button.disabled = false;
-        }
-    }
-}
-
-/**
- * Stop current audio playback
- */
-function stopTTS() {
-    if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-        currentAudio = null;
-        isPlaying = false;
-        
-        // Reset all playing buttons
-        document.querySelectorAll('.tts-btn.playing').forEach(btn => {
-            btn.classList.remove('playing');
-        });
-    }
-}
-
-/**
- * Initialize TTS buttons with data attributes
- */
-function initTTSButtons() {
-    // Auto-attach to buttons with data-tts-text attribute
-    document.querySelectorAll('[data-tts-text]').forEach(button => {
-        if (!button.hasAttribute('data-tts-initialized')) {
-            button.addEventListener('click', function(e) {
-                e.preventDefault();
-                const text = this.dataset.ttsText;
-                const voice = this.dataset.ttsVoice || getSelectedVoice();
-                playTTS(text, voice, this);
-            });
-            button.setAttribute('data-tts-initialized', 'true');
-        }
-    });
-    
-    // Voice selector highlight
-    document.querySelectorAll('.voice-option input[type="radio"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            document.querySelectorAll('.voice-option').forEach(opt => {
-                opt.classList.remove('selected');
-            });
-            this.closest('.voice-option').classList.add('selected');
-        });
-    });
-}
-
-// Auto-initialize when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initTTSButtons);
-} else {
-    initTTSButtons();
-}
-
-// Re-initialize on dynamic content load (for AJAX-loaded content)
-if (typeof MutationObserver !== 'undefined') {
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.addedNodes.length) {
-                initTTSButtons();
-            }
-        });
-    });
-    
-    document.addEventListener('DOMContentLoaded', () => {
-        observer.observe(document.body, { childList: true, subtree: true });
-    });
-}
-
-async function playGlossaryTTSFromUrl(button, mode='full') {
-    const url = button.getAttribute('data-tts-url');
-    const voice = getSelectedVoice ? getSelectedVoice() : 'female';
-
-    if (!url) {
-        alert('مسار TTS غير موجود.');
-        return;
-    }
-
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken(),
-            },
-            body: JSON.stringify({ mode, voice }),
-        });
-
-        const raw = await response.text();
-
-        if (!response.ok) {
-            console.error("TTS HTTP Error:", response.status, raw);
-            alert("خطأ في السيرفر.");
-            return;
-        }
-
-        const data = JSON.parse(raw);
-
-        if (!data.success || !data.audio_url) {
-            console.error("Bad response:", data);
-            alert("تعذر توليد الصوت.");
-            return;
-        }
-
-        lastAudioUrl = data.audio_url;
-        const audio = new Audio(data.audio_url);
-        await audio.play();
-
-    } catch (err) {
-        console.error("Glossary TTS Error:", err);
-        alert("حدث خطأ أثناء تشغيل الصوت.");
-    }
-}
-
-/**
- * Get selected speed from radio buttons or select
- */
 function getSelectedSpeed() {
-    const selected = document.querySelector('input[name="tts-speed"]:checked');
-    if (selected) return selected.value;
+    const radio = document.querySelector('input[name="tts-speed"]:checked');
+    if (radio) return radio.value;
     const sel = document.querySelector('select[name="tts-speed"]');
     if (sel) return sel.value;
     return 'normal';
 }
 
-/**
- * Browser-based TTS fallback using Web Speech API
- */
-function playBrowserTTS(text, voice = 'female', speed = 'normal') {
+function getSelectedEngine() {
+    const el = document.querySelector('input[name="tts-engine"]:checked');
+    return el ? el.value : 'ai';
+}
+
+// ──── Stop ────
+
+function stopTTS() {
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        currentAudio = null;
+    }
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    isPlaying = false;
+    document.querySelectorAll('.tts-btn.playing').forEach(b => b.classList.remove('playing'));
+}
+
+// ──── Browser TTS (Web Speech API) ────
+
+function playBrowserTTS(text, voice, speed) {
     if (!('speechSynthesis' in window)) {
         alert('المتصفح لا يدعم القراءة الصوتية. يرجى استخدام متصفح حديث.');
         return;
     }
-
-    // Cancel any ongoing speech
     speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'ar';
 
-    // Speed mapping
     const speedMap = { slow: 0.7, normal: 1.0, fast: 1.4 };
     utterance.rate = speedMap[speed] || 1.0;
 
-    // Try to find an Arabic voice
+    // Try to pick an Arabic voice
     const voices = speechSynthesis.getVoices();
     const arVoice = voices.find(v => v.lang.startsWith('ar'));
-    if (arVoice) {
-        utterance.voice = arVoice;
-    }
+    if (arVoice) utterance.voice = arVoice;
 
     utterance.onend = () => {
         isPlaying = false;
-        document.querySelectorAll('.tts-btn.playing').forEach(btn => {
-            btn.classList.remove('playing');
-        });
+        document.querySelectorAll('.tts-btn.playing').forEach(b => b.classList.remove('playing'));
     };
 
     speechSynthesis.speak(utterance);
     isPlaying = true;
 }
 
-/**
- * Download the last played audio file
- */
-function downloadLastAudio() {
-    if (!lastAudioUrl) {
-        alert('لا يوجد ملف صوتي للتحميل. قم بتشغيل القراءة الصوتية أولاً.');
-        return;
+// ──── AI TTS (Backend) ────
+
+async function playAITTS(text, voice, speed, button) {
+    const origHTML = button ? button.innerHTML : '';
+    if (button) {
+        button.innerHTML = '⏳ جاري التحميل...';
+        button.disabled = true;
+        button.classList.add('loading');
     }
 
-    const link = document.createElement('a');
-    link.href = lastAudioUrl;
-    link.download = 'tts_audio.mp3';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+        const res = await fetch('/service/tts/synthesize/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify({ text, voice, speed }),
+        });
+        const data = await res.json();
+
+        if (!data.success || !data.audio_url) throw new Error(data.error || 'فشل');
+
+        lastAudioUrl = data.audio_url;
+        currentAudio = new Audio(data.audio_url);
+
+        // Apply client-side playback rate tweak for speeds
+        const rateMap = { slow: 0.85, normal: 1.0, fast: 1.2 };
+        currentAudio.playbackRate = rateMap[speed] || 1.0;
+
+        currentAudio.onplay = () => {
+            isPlaying = true;
+            if (button) {
+                button.innerHTML = '⏹️ إيقاف';
+                button.classList.remove('loading');
+                button.classList.add('playing');
+                button.disabled = false;
+            }
+        };
+        currentAudio.onended = () => {
+            isPlaying = false;
+            if (button) {
+                button.innerHTML = origHTML;
+                button.classList.remove('playing');
+            }
+        };
+        currentAudio.onerror = () => {
+            isPlaying = false;
+            if (button) {
+                button.innerHTML = origHTML;
+                button.classList.remove('loading', 'playing');
+                button.disabled = false;
+            }
+            // Auto-fallback to browser
+            playBrowserTTS(text, voice, speed);
+        };
+
+        await currentAudio.play();
+    } catch (err) {
+        console.error('AI TTS Error:', err);
+        if (button) {
+            button.innerHTML = origHTML;
+            button.classList.remove('loading', 'playing');
+            button.disabled = false;
+        }
+        playBrowserTTS(text, voice, speed);
+    }
 }
 
-/**
- * Repeat last audio playback
- */
-function repeatLastAudio() {
-    if (!lastAudioUrl) {
-        alert('لا يوجد ملف صوتي لإعادة تشغيله.');
-        return;
+// ──── Main entry: play TTS text ────
+
+async function playTTS(text, voice, button) {
+    voice = voice || getSelectedVoice();
+    if (!button && typeof event !== 'undefined' && event?.target) {
+        button = event.target.closest('.tts-btn');
     }
 
+    if (currentAudio && isPlaying) { stopTTS(); return; }
+
+    const speed = getSelectedSpeed();
+    const engine = getSelectedEngine();
+
+    if (engine === 'browser') {
+        playBrowserTTS(text, voice, speed);
+    } else {
+        await playAITTS(text, voice, speed, button);
+    }
+}
+
+// ──── Glossary TTS ────
+
+async function playGlossaryTTS(termId, type, voice) {
+    voice = voice || getSelectedVoice();
+    const button = (typeof event !== 'undefined') ? event?.target?.closest('.tts-btn') : null;
+
+    if (currentAudio && isPlaying) { stopTTS(); return; }
+
+    const speed = getSelectedSpeed();
+    const engine = getSelectedEngine();
+
+    const origHTML = button ? button.innerHTML : '';
+    if (button) {
+        button.innerHTML = '⏳ جاري التحميل...';
+        button.disabled = true;
+        button.classList.add('loading');
+    }
+
+    try {
+        if (engine === 'browser') {
+            // For browser engine, we need to get the text from the page
+            // The button should have data attributes or we fetch from API
+            if (button) {
+                button.innerHTML = origHTML;
+                button.classList.remove('loading');
+                button.disabled = false;
+            }
+            // Fetch the text from the glossary TTS endpoint, but play via browser
+            const formData = new FormData();
+            formData.append('type', type || 'full');
+            formData.append('voice', voice);
+            // We'll just use the page text directly if available
+            const termEl = document.querySelector('.term-title');
+            const defEl = document.querySelector('.definition-text');
+            let text = '';
+            if (type === 'term' && termEl) text = termEl.textContent.trim();
+            else if (type === 'definition' && defEl) text = defEl.textContent.trim();
+            else text = (termEl ? termEl.textContent.trim() : '') + '. ' + (defEl ? defEl.textContent.trim() : '');
+            playBrowserTTS(text, voice, speed);
+            return;
+        }
+
+        // AI engine: use backend
+        const res = await fetch(`/service/glossary/${termId}/tts/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify({ type: type || 'full', mode: type || 'full', voice, speed }),
+        });
+        const data = await res.json();
+
+        if (!data.success || !data.audio_url) throw new Error(data.error || 'فشل');
+
+        lastAudioUrl = data.audio_url;
+        currentAudio = new Audio(data.audio_url);
+
+        const rateMap = { slow: 0.85, normal: 1.0, fast: 1.2 };
+        currentAudio.playbackRate = rateMap[speed] || 1.0;
+
+        currentAudio.onplay = () => {
+            isPlaying = true;
+            if (button) {
+                button.innerHTML = '⏹️ إيقاف';
+                button.classList.remove('loading');
+                button.classList.add('playing');
+                button.disabled = false;
+            }
+        };
+        currentAudio.onended = () => {
+            isPlaying = false;
+            if (button) { button.innerHTML = origHTML; button.classList.remove('playing'); }
+        };
+        currentAudio.onerror = () => {
+            isPlaying = false;
+            if (button) { button.innerHTML = origHTML; button.classList.remove('loading', 'playing'); button.disabled = false; }
+        };
+
+        await currentAudio.play();
+
+        // Update play count display
+        const countEl = document.getElementById('tts-play-count');
+        if (countEl && data.play_count != null) countEl.textContent = data.play_count;
+
+    } catch (err) {
+        console.error('Glossary TTS Error:', err);
+        if (button) {
+            button.innerHTML = origHTML;
+            button.classList.remove('loading', 'playing');
+            button.disabled = false;
+        }
+    }
+}
+
+// ──── Inquiry TTS ────
+
+async function playInquiryTTS(inquiryId, voice) {
+    voice = voice || getSelectedVoice();
+    const button = (typeof event !== 'undefined') ? event?.target?.closest('.tts-btn') : null;
+
+    if (currentAudio && isPlaying) { stopTTS(); return; }
+
+    const origHTML = button ? button.innerHTML : '';
+    if (button) {
+        button.innerHTML = '⏳ جاري التحميل...';
+        button.disabled = true;
+        button.classList.add('loading');
+    }
+
+    try {
+        const formData = new FormData();
+        formData.append('voice', voice);
+
+        const res = await fetch(`/service/inquiry/${inquiryId}/tts/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCSRFToken() },
+            body: formData,
+        });
+        const data = await res.json();
+
+        if (!data.success || !data.audio_url) throw new Error(data.error || 'فشل');
+
+        currentAudio = new Audio(data.audio_url);
+        currentAudio.onplay = () => {
+            isPlaying = true;
+            if (button) {
+                button.innerHTML = '⏹️ إيقاف';
+                button.classList.remove('loading');
+                button.classList.add('playing');
+                button.disabled = false;
+            }
+        };
+        currentAudio.onended = () => {
+            isPlaying = false;
+            if (button) { button.innerHTML = origHTML; button.classList.remove('playing'); }
+        };
+
+        await currentAudio.play();
+    } catch (err) {
+        console.error('Inquiry TTS Error:', err);
+        if (button) {
+            button.innerHTML = origHTML;
+            button.classList.remove('loading', 'playing');
+            button.disabled = false;
+        }
+    }
+}
+
+// ──── Utility ────
+
+function downloadLastAudio() {
+    if (!lastAudioUrl) { alert('لا يوجد ملف صوتي للتحميل.'); return; }
+    const a = document.createElement('a');
+    a.href = lastAudioUrl;
+    a.download = 'tts_audio.mp3';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
+function repeatLastAudio() {
+    if (!lastAudioUrl) { alert('لا يوجد ملف صوتي لإعادة تشغيله.'); return; }
     stopTTS();
     currentAudio = new Audio(lastAudioUrl);
     const speed = getSelectedSpeed();
-    if (speed === 'fast') {
-        currentAudio.playbackRate = 1.3;
-    }
-
+    const rateMap = { slow: 0.85, normal: 1.0, fast: 1.2 };
+    currentAudio.playbackRate = rateMap[speed] || 1.0;
     currentAudio.onplay = () => { isPlaying = true; };
-    currentAudio.onended = () => {
-        isPlaying = false;
-        document.querySelectorAll('.tts-btn.playing').forEach(btn => {
-            btn.classList.remove('playing');
-        });
-    };
-
+    currentAudio.onended = () => { isPlaying = false; };
     currentAudio.play();
+}
+
+// ──── Auto-init ────
+
+function initTTSButtons() {
+    // Data-attribute buttons
+    document.querySelectorAll('[data-tts-text]').forEach(btn => {
+        if (btn.hasAttribute('data-tts-initialized')) return;
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            playTTS(this.dataset.ttsText, this.dataset.ttsVoice || getSelectedVoice(), this);
+        });
+        btn.setAttribute('data-tts-initialized', 'true');
+    });
+
+    // Voice selector highlight sync
+    document.querySelectorAll('.voice-option input[type="radio"]').forEach(r => {
+        r.addEventListener('change', function() {
+            document.querySelectorAll('.voice-option').forEach(o => o.classList.remove('selected'));
+            this.closest('.voice-option')?.classList.add('selected');
+        });
+    });
+
+    // Engine selector highlight sync
+    document.querySelectorAll('.engine-option input[type="radio"]').forEach(r => {
+        r.addEventListener('change', function() {
+            document.querySelectorAll('.engine-option').forEach(o => o.classList.remove('selected'));
+            this.closest('.engine-option')?.classList.add('selected');
+        });
+    });
+
+    // Speed selector highlight sync
+    document.querySelectorAll('.speed-option input[type="radio"]').forEach(r => {
+        r.addEventListener('change', function() {
+            document.querySelectorAll('.speed-option').forEach(o => o.classList.remove('selected'));
+            this.closest('.speed-option')?.classList.add('selected');
+        });
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initTTSButtons);
+} else {
+    initTTSButtons();
+}
+
+if (typeof MutationObserver !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+        new MutationObserver(() => initTTSButtons())
+            .observe(document.body, { childList: true, subtree: true });
+    });
 }

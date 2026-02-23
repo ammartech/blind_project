@@ -8,7 +8,7 @@ class TermForm(forms.ModelForm):
 
     class Meta:
         model = GlossaryTerm
-        fields = ('term', 'definition', 'pronunciation_hint')
+        fields = ('term', 'definition', 'pronunciation_hint', 'category')
         widgets = {
             'term': forms.TextInput(attrs={
                 'class': 'input',
@@ -22,5 +22,9 @@ class TermForm(forms.ModelForm):
             'pronunciation_hint': forms.TextInput(attrs={
                 'class': 'input',
                 'placeholder': 'تلميح النطق (اختياري)',
+            }),
+            'category': forms.TextInput(attrs={
+                'class': 'input',
+                'placeholder': 'التصنيف (اختياري)',
             }),
         }
