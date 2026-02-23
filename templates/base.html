@@ -105,9 +105,25 @@
         <button id="a11y-close" class="a11y-close-btn" type="button" aria-label="إغلاق">✕</button>
       </div>
 
+      <!-- Engine toggle -->
+      <div class="a11y-panel-row">
+        <span class="a11y-label">المحرك:</span>
+        <div class="a11y-option-group" role="radiogroup" aria-label="محرك القراءة">
+          <label class="a11y-voice-option selected">
+            <input type="radio" name="a11y-engine" value="ai" checked>
+            <span>🤖 ذكاء اصطناعي</span>
+          </label>
+          <label class="a11y-voice-option">
+            <input type="radio" name="a11y-engine" value="browser">
+            <span>🌐 المتصفح</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Voice -->
       <div class="a11y-panel-row">
         <span class="a11y-label">الصوت:</span>
-        <div class="a11y-voice-select" role="radiogroup" aria-label="اختيار الصوت">
+        <div class="a11y-option-group" role="radiogroup" aria-label="اختيار الصوت">
           <label class="a11y-voice-option selected">
             <input type="radio" name="a11y-voice" value="female" checked>
             <span>👩 أنثى</span>
@@ -115,6 +131,25 @@
           <label class="a11y-voice-option">
             <input type="radio" name="a11y-voice" value="male">
             <span>👨 ذكر</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Speed -->
+      <div class="a11y-panel-row">
+        <span class="a11y-label">السرعة:</span>
+        <div class="a11y-option-group" role="radiogroup" aria-label="سرعة القراءة">
+          <label class="a11y-voice-option">
+            <input type="radio" name="a11y-speed" value="slow">
+            <span>🐢 بطيء</span>
+          </label>
+          <label class="a11y-voice-option selected">
+            <input type="radio" name="a11y-speed" value="normal" checked>
+            <span>▶️ عادي</span>
+          </label>
+          <label class="a11y-voice-option">
+            <input type="radio" name="a11y-speed" value="fast">
+            <span>⚡ سريع</span>
           </label>
         </div>
       </div>
@@ -167,36 +202,45 @@
         return '';
       }
 
+      // Toggle panel
       fab.addEventListener('click', () => {
         const opening = panel.classList.contains('hidden');
         panel.classList.toggle('hidden');
         fab.classList.toggle('active', opening);
         fab.setAttribute('aria-expanded', String(opening));
       });
-
       closeBtn.addEventListener('click', () => {
         panel.classList.add('hidden');
         fab.classList.remove('active');
         fab.setAttribute('aria-expanded', 'false');
       });
 
-      panel.querySelectorAll('input[name="a11y-voice"]').forEach(r => {
+      // Highlight sync for all radio groups in panel
+      panel.querySelectorAll('.a11y-voice-option input[type="radio"]').forEach(r => {
         r.addEventListener('change', () => {
-          panel.querySelectorAll('.a11y-voice-option').forEach(l => l.classList.remove('selected'));
+          const group = r.closest('.a11y-option-group, .a11y-voice-select');
+          if (group) {
+            group.querySelectorAll('.a11y-voice-option').forEach(l => l.classList.remove('selected'));
+          }
           r.closest('.a11y-voice-option')?.classList.add('selected');
         });
       });
 
       function getVoice() {
-        const c = panel.querySelector('input[name="a11y-voice"]:checked');
-        return c ? c.value : 'female';
+        return panel.querySelector('input[name="a11y-voice"]:checked')?.value || 'female';
+      }
+      function getEngine() {
+        return panel.querySelector('input[name="a11y-engine"]:checked')?.value || 'ai';
+      }
+      function getSpeed() {
+        return panel.querySelector('input[name="a11y-speed"]:checked')?.value || 'normal';
       }
 
       function getPageText() {
         const main = document.getElementById('main');
         if (!main) return '';
         const clone = main.cloneNode(true);
-        clone.querySelectorAll('script,style,nav,button,input,.a11y-toolbar,.breadcrumb,.back-link').forEach(el => el.remove());
+        clone.querySelectorAll('script,style,nav,button,input,select,label,.a11y-toolbar,.breadcrumb,.back-link,.tts-settings,.tts-actions,.tts-controls').forEach(el => el.remove());
         return (clone.textContent || '').replace(/\s+/g, ' ').trim();
       }
 
@@ -207,6 +251,7 @@
         if (autoHide) setTimeout(() => progress.classList.add('hidden'), 3500);
       }
 
+      // Read page
       readBtn.addEventListener('click', async () => {
         if (toolbarPlaying) { stopPlayback(); return; }
 
@@ -215,7 +260,16 @@
 
         const truncated = text.substring(0, 2000);
         const voice = getVoice();
+        const speed = getSpeed();
+        const engine = getEngine();
 
+        // Browser engine path
+        if (engine === 'browser') {
+          doBrowserTTS(truncated, voice, speed);
+          return;
+        }
+
+        // AI engine path
         readBtn.disabled = true;
         stopBtn.disabled = false;
         readBtn.innerHTML = '⏳ جاري التحميل...';
@@ -225,12 +279,14 @@
           const res = await fetch('/service/tts/synthesize/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRF() },
-            body: JSON.stringify({ text: truncated, voice: voice }),
+            body: JSON.stringify({ text: truncated, voice, speed }),
           });
           const data = await res.json();
 
           if (data.success && data.audio_url) {
             toolbarAudio = new Audio(data.audio_url);
+            const rateMap = { slow: 0.85, normal: 1.0, fast: 1.2 };
+            toolbarAudio.playbackRate = rateMap[speed] || 1.0;
 
             toolbarAudio.onplay = () => {
               toolbarPlaying = true;
@@ -241,7 +297,7 @@
               setStatus('▶ جاري القراءة...');
             };
             toolbarAudio.onended = () => { resetUI(); setStatus('✅ اكتملت القراءة', true); };
-            toolbarAudio.onerror = () => { resetUI(); doBrowserFallback(truncated, voice); };
+            toolbarAudio.onerror = () => { resetUI(); doBrowserTTS(truncated, voice, speed); };
 
             await toolbarAudio.play();
           } else {
@@ -250,7 +306,7 @@
         } catch (err) {
           console.error('A11y TTS:', err);
           resetUI();
-          doBrowserFallback(truncated, voice);
+          doBrowserTTS(truncated, voice, speed);
         }
       });
 
@@ -273,15 +329,25 @@
         stopBtn.disabled = true;
       }
 
-      function doBrowserFallback(text, voice) {
-        if (!('speechSynthesis' in window)) return;
+      function doBrowserTTS(text, voice, speed) {
+        if (!('speechSynthesis' in window)) {
+          setStatus('المتصفح لا يدعم القراءة الصوتية', true);
+          return;
+        }
+        speechSynthesis.cancel();
         setStatus('🔊 القراءة عبر محرك المتصفح');
         const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'ar'; u.rate = 0.9;
+        u.lang = 'ar';
+        const speedMap = { slow: 0.7, normal: 0.9, fast: 1.4 };
+        u.rate = speedMap[speed] || 0.9;
+        const voices = speechSynthesis.getVoices();
+        const arVoice = voices.find(v => v.lang.startsWith('ar'));
+        if (arVoice) u.voice = arVoice;
         u.onend = () => { resetUI(); setStatus('✅ اكتملت القراءة', true); };
         toolbarPlaying = true;
         readBtn.innerHTML = '⏸ إيقاف مؤقت';
         readBtn.classList.add('playing');
+        readBtn.disabled = false;
         stopBtn.disabled = false;
         speechSynthesis.speak(u);
       }

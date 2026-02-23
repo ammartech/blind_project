@@ -17,6 +17,10 @@
       <strong>{{ term.pronunciation_hint }}</strong>
     </p>
   {% endif %}
+
+  {% if term.category %}
+    <span class="term-badge">{{ term.category }}</span>
+  {% endif %}
 </div>
 
 <!-- Definition Card -->
@@ -31,48 +35,85 @@
 <div class="card tts-card">
   <h3>🔊 القراءة الصوتية</h3>
 
-  <!-- Voice selector -->
-  <div class="tts-controls">
-    <span class="tts-controls-label">اختر الصوت:</span>
-    <div class="voice-selector" role="radiogroup" aria-label="اختيار الصوت">
-      <label class="voice-option selected">
-        <input type="radio" name="tts-voice" value="female" checked>
-        <span>👩 أنثى</span>
-      </label>
-      <label class="voice-option">
-        <input type="radio" name="tts-voice" value="male">
-        <span>👨 ذكر</span>
-      </label>
+  <div class="tts-settings">
+    <!-- Engine toggle -->
+    <div class="tts-setting-group">
+      <span class="tts-setting-label">محرك القراءة:</span>
+      <div class="engine-selector" role="radiogroup" aria-label="اختيار محرك القراءة">
+        <label class="engine-option selected">
+          <input type="radio" name="tts-engine" value="ai" checked>
+          <span>🤖 ذكاء اصطناعي</span>
+        </label>
+        <label class="engine-option">
+          <input type="radio" name="tts-engine" value="browser">
+          <span>🌐 محرك المتصفح</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Voice selector -->
+    <div class="tts-setting-group">
+      <span class="tts-setting-label">الصوت:</span>
+      <div class="voice-selector" role="radiogroup" aria-label="اختيار الصوت">
+        <label class="voice-option selected">
+          <input type="radio" name="tts-voice" value="female" checked>
+          <span>👩 أنثى</span>
+        </label>
+        <label class="voice-option">
+          <input type="radio" name="tts-voice" value="male">
+          <span>👨 ذكر</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Speed selector -->
+    <div class="tts-setting-group">
+      <span class="tts-setting-label">السرعة:</span>
+      <div class="speed-selector" role="radiogroup" aria-label="اختيار السرعة">
+        <label class="speed-option">
+          <input type="radio" name="tts-speed" value="slow">
+          <span>🐢 بطيء</span>
+        </label>
+        <label class="speed-option selected">
+          <input type="radio" name="tts-speed" value="normal" checked>
+          <span>▶️ عادي</span>
+        </label>
+        <label class="speed-option">
+          <input type="radio" name="tts-speed" value="fast">
+          <span>⚡ سريع</span>
+        </label>
+      </div>
     </div>
   </div>
 
   <!-- TTS Buttons Row -->
   <div class="tts-actions">
-    <button class="tts-btn large" id="tts-full-btn"
-            type="button"
-            data-tts-url="{% url 'service:glossary_tts' term.pk %}"
+    <button class="tts-btn large" type="button"
+            onclick="playGlossaryTTS({{ term.pk }}, 'full')"
             aria-label="قراءة المصطلح والتعريف معاً">
       🔊 قراءة المصطلح والتعريف
     </button>
 
-    <button class="tts-btn" id="tts-term-btn"
-            type="button"
-            data-tts-url="{% url 'service:glossary_tts' term.pk %}"
-            data-tts-mode="term"
+    <button class="tts-btn" type="button"
+            onclick="playGlossaryTTS({{ term.pk }}, 'term')"
             aria-label="قراءة المصطلح فقط">
       📖 المصطلح فقط
     </button>
 
-    <button class="tts-btn" id="tts-def-btn"
-            type="button"
-            data-tts-url="{% url 'service:glossary_tts' term.pk %}"
-            data-tts-mode="definition"
+    <button class="tts-btn" type="button"
+            onclick="playGlossaryTTS({{ term.pk }}, 'definition')"
             aria-label="قراءة التعريف فقط">
       📝 التعريف فقط
     </button>
+
+    <button class="tts-btn danger" type="button"
+            onclick="stopTTS()"
+            aria-label="إيقاف القراءة">
+      ⏹ إيقاف
+    </button>
   </div>
 
-  <p class="hint">سيتم استخدام الصوت المختار (ذكر/أنثى) عند تشغيل القراءة.</p>
+  <p class="hint">اختر المحرك والصوت والسرعة ثم اضغط على زر القراءة.</p>
 </div>
 
 <!-- Stats Card -->
@@ -92,146 +133,4 @@
   {% endif %}
 </div>
 
-{% endblock %}
-
-{% block extra_js %}
-<script>
-(function() {
-  // ---- CSRF token from cookies ----
-  function getCSRF() {
-    const cookies = document.cookie.split(';');
-    for (let c of cookies) {
-      c = c.trim();
-      if (c.startsWith('csrftoken=')) return decodeURIComponent(c.substring(10));
-    }
-    return '';
-  }
-
-  // ---- Voice selector UI sync ----
-  function syncVoiceUI() {
-    document.querySelectorAll('.voice-option').forEach(l => l.classList.remove('selected'));
-    const checked = document.querySelector('input[name="tts-voice"]:checked');
-    if (checked) checked.closest('.voice-option')?.classList.add('selected');
-  }
-  document.querySelectorAll('input[name="tts-voice"]').forEach(r =>
-    r.addEventListener('change', syncVoiceUI)
-  );
-
-  function getVoice() {
-    const c = document.querySelector('input[name="tts-voice"]:checked');
-    return c ? c.value : 'female';
-  }
-
-  // ---- TTS playback state ----
-  let audio = null;
-  let playing = false;
-
-  function stopAudio() {
-    if (audio) { audio.pause(); audio.currentTime = 0; audio = null; }
-    if ('speechSynthesis' in window) speechSynthesis.cancel();
-    playing = false;
-    document.querySelectorAll('.tts-btn').forEach(b => {
-      b.classList.remove('loading', 'playing');
-      b.disabled = false;
-    });
-  }
-
-  // ---- Main TTS handler ----
-  async function playTTSFromButton(button) {
-    if (playing) { stopAudio(); return; }
-
-    const url = button.getAttribute('data-tts-url');
-    const mode = button.getAttribute('data-tts-mode') || 'full';
-    const voice = getVoice();
-
-    if (!url) return;
-
-    const origHTML = button.innerHTML;
-    button.innerHTML = '⏳ جاري التحميل...';
-    button.disabled = true;
-    button.classList.add('loading');
-
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCSRF(),
-        },
-        body: JSON.stringify({ mode: mode, type: mode, voice: voice }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success || !data.audio_url) {
-        throw new Error(data.error || 'فشل في توليد الصوت');
-      }
-
-      audio = new Audio(data.audio_url);
-
-      audio.onplay = () => {
-        playing = true;
-        button.innerHTML = '⏹️ إيقاف';
-        button.classList.remove('loading');
-        button.classList.add('playing');
-        button.disabled = false;
-      };
-
-      audio.onended = () => {
-        playing = false;
-        audio = null;
-        button.innerHTML = origHTML;
-        button.classList.remove('playing');
-      };
-
-      audio.onerror = () => {
-        playing = false;
-        button.innerHTML = origHTML;
-        button.classList.remove('loading', 'playing');
-        button.disabled = false;
-        // Fallback to browser speech
-        fallbackBrowserTTS(mode, voice);
-      };
-
-      await audio.play();
-
-      // Update play count
-      if (data.play_count != null) {
-        const el = document.getElementById('tts-play-count');
-        if (el) el.textContent = data.play_count;
-      }
-
-    } catch (err) {
-      console.error('TTS Error:', err);
-      button.innerHTML = origHTML;
-      button.classList.remove('loading', 'playing');
-      button.disabled = false;
-      // Fallback to browser speech
-      fallbackBrowserTTS(mode, voice);
-    }
-  }
-
-  function fallbackBrowserTTS(mode, voice) {
-    if (!('speechSynthesis' in window)) return;
-    const term = {{ term.term|escapejs|safe }};
-    const def = {{ term.definition|escapejs|safe }};
-    let text = term + '. ' + def;
-    if (mode === 'term') text = term;
-    else if (mode === 'definition') text = def;
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'ar';
-    utterance.rate = 0.9;
-    speechSynthesis.speak(utterance);
-  }
-
-  // ---- Attach click handlers ----
-  document.querySelectorAll('[data-tts-url]').forEach(btn => {
-    btn.addEventListener('click', function(e) {
-      e.preventDefault();
-      playTTSFromButton(this);
-    });
-  });
-})();
-</script>
 {% endblock %}

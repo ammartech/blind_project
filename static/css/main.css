@@ -1481,15 +1481,38 @@ textarea.input{
 
 
 /* ============================================
- *  Voice Selector (radio group)
+ *  TTS Settings & Selectors
  *  ============================================ */
-.voice-selector{
+.tts-settings{
   display: flex;
-  gap: 8px;
-  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.voice-option{
+.tts-setting-group{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tts-setting-label{
+  font-weight: 600;
+  font-size: 0.92rem;
+  min-width: 90px;
+  color: var(--muted);
+}
+
+/* Shared selector styles for voice, engine, speed */
+.voice-selector, .engine-selector, .speed-selector{
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.voice-option, .engine-option, .speed-option{
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1497,22 +1520,24 @@ textarea.input{
   border: 2px solid var(--border);
   border-radius: 12px;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   transition: all 0.2s;
   user-select: none;
 }
 
-.voice-option input[type="radio"]{
+.voice-option input[type="radio"],
+.engine-option input[type="radio"],
+.speed-option input[type="radio"]{
   display: none;
 }
 
-.voice-option.selected{
+.voice-option.selected, .engine-option.selected, .speed-option.selected{
   border-color: var(--blue);
   background: rgba(30,78,216,.08);
   font-weight: 600;
 }
 
-.voice-option:hover{
+.voice-option:hover, .engine-option:hover, .speed-option:hover{
   border-color: var(--blue);
   transform: scale(1.02);
 }
@@ -1520,6 +1545,29 @@ textarea.input{
 .tts-controls-label{
   font-weight: 600;
   font-size: 0.95rem;
+}
+
+/* Term badge (category) */
+.term-badge{
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 20px;
+  background: rgba(30,78,216,.08);
+  border: 1px solid rgba(30,78,216,.2);
+  color: var(--blue);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+/* Danger button for TTS stop */
+.tts-btn.danger{
+  border-color: rgba(215,38,56,.4);
+  background: rgba(215,38,56,.08);
+  color: #D72638;
+}
+.tts-btn.danger:hover{
+  background: rgba(215,38,56,.18);
 }
 
 /* ============================================
@@ -1706,9 +1754,10 @@ textarea.input{
   background: rgba(215,38,56,.18);
 }
 
-.a11y-voice-select{
+.a11y-voice-select, .a11y-option-group{
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .a11y-voice-option{
