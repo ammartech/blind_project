@@ -482,7 +482,8 @@ def tts_voices(request):
     """
     tts = get_tts_service()
     voices = tts.get_available_voices()
-    return JsonResponse({'voices': voices})
+    engine = tts.get_engine_info()
+    return JsonResponse({'voices': voices, 'engine': engine})
 
 
 @login_required
@@ -538,8 +539,14 @@ def tts_glossary_term(request, pk: int):
         voice: 'male' | 'female'
     """
     term = get_object_or_404(GlossaryTerm, pk=pk)
-    voice = request.POST.get('voice', 'female')
-    content_type = request.POST.get('type', 'full')
+
+    # Accept both JSON body and form data
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        data = {}
+    voice = data.get('voice') or request.POST.get('voice', 'female')
+    content_type = data.get('mode') or data.get('type') or request.POST.get('type', 'full')
 
     # Build text based on type
     if content_type == 'term':

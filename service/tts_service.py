@@ -1,9 +1,14 @@
 """
 TTS Service - Text-to-Speech for Arabic
-Uses gTTS (Google Text-to-Speech) as the primary engine.
-Falls back gracefully when unavailable.
+Uses edge-tts (Microsoft Azure Neural TTS) as the primary engine.
+Falls back to gTTS, then browser Speech Synthesis if unavailable.
+
+Voices:
+  - Female: ar-SA-ZariyahNeural (Saudi Arabic female)
+  - Male:   ar-SA-HamedNeural   (Saudi Arabic male)
 """
 
+import asyncio
 import hashlib
 import os
 from pathlib import Path
@@ -26,8 +31,22 @@ def get_audio_url(audio_path):
     return f'{settings.MEDIA_URL}{rel_path}'
 
 
+# Map friendly names to edge-tts voice IDs
+EDGE_VOICES = {
+    'female': 'ar-SA-ZariyahNeural',
+    'male': 'ar-SA-HamedNeural',
+}
+
+# Speed rate strings for edge-tts SSML
+EDGE_SPEED = {
+    'slow': '-30%',
+    'normal': '+0%',
+    'fast': '+25%',
+}
+
+
 class TTSService:
-    """Arabic Text-to-Speech service using gTTS."""
+    """Arabic Text-to-Speech service using edge-tts (Microsoft Neural TTS)."""
 
     MAX_TEXT_LENGTH = 2000
 
@@ -38,21 +57,38 @@ class TTSService:
         )
         os.makedirs(self.output_dir, exist_ok=True)
 
-        self._gtts_available = False
+        # Detect available engines
+        self._edge_available = False
         try:
-            from gtts import gTTS  # noqa: F401
-            self._gtts_available = True
+            import edge_tts  # noqa: F401
+            self._edge_available = True
         except ImportError:
             pass
 
+        self._gtts_available = False
+        if not self._edge_available:
+            try:
+                from gtts import gTTS  # noqa: F401
+                self._gtts_available = True
+            except ImportError:
+                pass
+
+    # --------------------------------------------------
+    # Cache helpers
+    # --------------------------------------------------
+
     def _cache_key(self, text, voice, speed):
-        """Generate a deterministic filename from text + voice + speed."""
-        raw = f'{text}:{voice}:{speed}'
+        engine = 'edge' if self._edge_available else 'gtts'
+        raw = f'{engine}:{text}:{voice}:{speed}'
         h = hashlib.md5(raw.encode()).hexdigest()[:16]
-        return f'tts_{voice}_{speed}_{h}.mp3'
+        return f'tts_{engine}_{voice}_{speed}_{h}.mp3'
 
     def _cache_path(self, text, voice, speed='normal'):
         return os.path.join(self.output_dir, self._cache_key(text, voice, speed))
+
+    # --------------------------------------------------
+    # Public API
+    # --------------------------------------------------
 
     def synthesize(self, text, voice='female', speed='normal'):
         """
@@ -71,18 +107,30 @@ class TTSService:
             raise ValueError('النص مطلوب')
 
         if len(text) > self.MAX_TEXT_LENGTH:
-            raise ValueError(f'النص طويل جداً (الحد الأقصى {self.MAX_TEXT_LENGTH} حرف)')
+            raise ValueError(
+                f'النص طويل جداً (الحد الأقصى {self.MAX_TEXT_LENGTH} حرف)'
+            )
+
+        if voice not in ('male', 'female'):
+            voice = 'female'
+        if speed not in ('slow', 'normal', 'fast'):
+            speed = 'normal'
 
         path = self._cache_path(text, voice, speed)
 
         if os.path.exists(path):
             return path
 
+        # Try edge-tts first (AI neural voices)
+        if self._edge_available:
+            return self._synthesize_edge(text, voice, speed, path)
+
+        # Fallback to gTTS
         if self._gtts_available:
             return self._synthesize_gtts(text, voice, speed, path)
 
         raise RuntimeError(
-            'خدمة TTS غير متاحة. يرجى تثبيت gTTS: pip install gTTS'
+            'خدمة TTS غير متاحة. يرجى تثبيت edge-tts: pip install edge-tts'
         )
 
     def synthesize_to_bytes(self, text, voice='female', speed='normal'):
@@ -93,23 +141,92 @@ class TTSService:
 
     def get_available_voices(self):
         """Return list of available voice options."""
-        return [
-            {'id': 'female', 'name': 'صوت أنثوي', 'lang': 'ar'},
-            {'id': 'male', 'name': 'صوت ذكوري', 'lang': 'ar'},
+        voices = [
+            {
+                'id': 'female',
+                'name': 'زارية - صوت أنثوي',
+                'lang': 'ar-SA',
+                'engine': 'edge-tts' if self._edge_available else 'gtts',
+            },
+            {
+                'id': 'male',
+                'name': 'حامد - صوت ذكوري',
+                'lang': 'ar-SA',
+                'engine': 'edge-tts' if self._edge_available else 'gtts',
+            },
         ]
+        return voices
+
+    def get_engine_info(self):
+        """Return info about which TTS engine is active."""
+        if self._edge_available:
+            return {
+                'engine': 'edge-tts',
+                'label': 'Microsoft Azure Neural TTS',
+                'voices': {
+                    'female': EDGE_VOICES['female'],
+                    'male': EDGE_VOICES['male'],
+                },
+            }
+        if self._gtts_available:
+            return {
+                'engine': 'gtts',
+                'label': 'Google Text-to-Speech',
+                'voices': {'female': 'ar (com)', 'male': 'ar (co.uk)'},
+            }
+        return {'engine': None, 'label': 'غير متاح'}
+
+    # --------------------------------------------------
+    # edge-tts engine (primary)
+    # --------------------------------------------------
+
+    def _synthesize_edge(self, text, voice, speed, output_path):
+        """Generate audio using Microsoft Edge Neural TTS."""
+        import edge_tts
+
+        voice_id = EDGE_VOICES.get(voice, EDGE_VOICES['female'])
+        rate = EDGE_SPEED.get(speed, '+0%')
+
+        async def _generate():
+            communicate = edge_tts.Communicate(
+                text=text,
+                voice=voice_id,
+                rate=rate,
+            )
+            await communicate.save(output_path)
+
+        # Run async in a new event loop (safe in sync Django views)
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    pool.submit(lambda: asyncio.run(_generate())).result()
+            else:
+                loop.run_until_complete(_generate())
+        except RuntimeError:
+            asyncio.run(_generate())
+
+        return output_path
+
+    # --------------------------------------------------
+    # gTTS engine (fallback)
+    # --------------------------------------------------
 
     def _synthesize_gtts(self, text, voice, speed, output_path):
-        """Generate audio using Google Text-to-Speech."""
+        """Generate audio using Google Text-to-Speech (fallback)."""
         from gtts import gTTS
 
         slow = speed == 'slow'
-
-        # Use different TLD for slight voice variation
         tld = 'com' if voice == 'female' else 'co.uk'
 
         tts = gTTS(text=text, lang='ar', tld=tld, slow=slow)
         tts.save(output_path)
         return output_path
+
+    # --------------------------------------------------
+    # Cache management
+    # --------------------------------------------------
 
     def clear_cache(self):
         """Remove all cached audio files."""

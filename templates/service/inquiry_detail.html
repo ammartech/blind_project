@@ -35,14 +35,18 @@
       <div class="question-text">
         <h3>النص المفرغ</h3>
         <p class="para">{{ inquiry.transcription_text|linebreaksbr }}</p>
-        <button class="tts-btn" data-tts="{{ inquiry.transcription_text|escapejs }}" aria-label="قراءة السؤال">
+        <button class="tts-btn" type="button"
+                data-tts-text="{{ inquiry.transcription_text|escapejs }}"
+                aria-label="قراءة السؤال">
           🔊 قراءة السؤال
         </button>
       </div>
     {% elif inquiry.question_text %}
       <div class="question-text">
         <p class="para">{{ inquiry.question_text|linebreaksbr }}</p>
-        <button class="tts-btn" data-tts="{{ inquiry.question_text|escapejs }}" aria-label="قراءة السؤال">
+        <button class="tts-btn" type="button"
+                data-tts-text="{{ inquiry.question_text|escapejs }}"
+                aria-label="قراءة السؤال">
           🔊 قراءة السؤال
         </button>
       </div>
@@ -59,7 +63,9 @@
   <div class="card answer-card">
     <h2>الإجابة</h2>
     <p class="para">{{ inquiry.answer_text|linebreaksbr }}</p>
-    <button class="tts-btn" data-tts="{{ inquiry.answer_text|escapejs }}" aria-label="قراءة الإجابة">
+    <button class="tts-btn" type="button"
+            data-tts-text="{{ inquiry.answer_text|escapejs }}"
+            aria-label="قراءة الإجابة">
       🔊 قراءة الإجابة
     </button>
     <div class="meta-info">
@@ -119,24 +125,4 @@
     <a class="btn secondary" href="{% url 'service:dashboard' %}">← العودة للوحة التحكم</a>
   </div>
 </div>
-
-<p class="hint">ملاحظة: القراءة الصوتية تعتمد على محرك المتصفح (SpeechSynthesis).</p>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-document.querySelectorAll('.tts-btn').forEach(btn => {
-  btn.addEventListener('click', function() {
-    const text = this.dataset.tts;
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'ar-SA';
-      utterance.rate = 0.9;
-      speechSynthesis.speak(utterance);
-    } else {
-      alert('متصفحك لا يدعم القراءة الصوتية.');
-    }
-  });
-});
-</script>
 {% endblock %}

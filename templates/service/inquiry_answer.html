@@ -23,7 +23,9 @@
       {{ inquiry.question_text|linebreaksbr }}
     {% endif %}
   </p>
-  <button class="tts-btn" data-tts="{{ inquiry.transcription_text|default:inquiry.question_text|escapejs }}" aria-label="قراءة السؤال">
+  <button class="tts-btn" type="button"
+          data-tts-text="{{ inquiry.transcription_text|default:inquiry.question_text|escapejs }}"
+          aria-label="قراءة السؤال">
     🔊 قراءة السؤال
   </button>
 </div>
@@ -55,20 +57,4 @@
     </div>
   </form>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-document.querySelectorAll('.tts-btn').forEach(btn => {
-  btn.addEventListener('click', function() {
-    const text = this.dataset.tts;
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'ar-SA';
-      utterance.rate = 0.9;
-      speechSynthesis.speak(utterance);
-    }
-  });
-});
-</script>
 {% endblock %}
