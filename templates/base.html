@@ -92,26 +92,21 @@
 
   <!-- ===== Global Accessibility TTS Toolbar ===== -->
   <div id="a11y-toolbar" class="a11y-toolbar" role="region" aria-label="شريط القراءة الصوتية">
-    <!-- Collapsed state: single FAB button -->
     <button id="a11y-fab" class="a11y-fab" type="button"
             aria-label="فتح أدوات القراءة الصوتية"
-            title="أدوات القراءة الصوتية">
+            title="أدوات القراءة الصوتية"
+            aria-expanded="false">
       🔊
     </button>
 
-    <!-- Expanded toolbar panel -->
     <div id="a11y-panel" class="a11y-panel hidden" role="toolbar" aria-label="أدوات القراءة">
+      <div class="a11y-panel-header">
+        <span class="a11y-panel-title">🎧 القراءة الصوتية</span>
+        <button id="a11y-close" class="a11y-close-btn" type="button" aria-label="إغلاق">✕</button>
+      </div>
+
       <div class="a11y-panel-row">
-        <button id="a11y-read-page" class="a11y-action-btn" type="button"
-                aria-label="قراءة محتوى الصفحة">
-          🔊 قراءة الصفحة
-        </button>
-
-        <button id="a11y-stop" class="a11y-action-btn danger" type="button"
-                aria-label="إيقاف القراءة" disabled>
-          ⏹ إيقاف
-        </button>
-
+        <span class="a11y-label">الصوت:</span>
         <div class="a11y-voice-select" role="radiogroup" aria-label="اختيار الصوت">
           <label class="a11y-voice-option selected">
             <input type="radio" name="a11y-voice" value="female" checked>
@@ -122,20 +117,25 @@
             <span>👨 ذكر</span>
           </label>
         </div>
-
-        <button id="a11y-close" class="a11y-close-btn" type="button" aria-label="إغلاق الشريط">✕</button>
       </div>
 
-      <!-- Mini progress bar -->
+      <div class="a11y-panel-actions">
+        <button id="a11y-read-page" class="a11y-action-btn primary" type="button">
+          🔊 قراءة محتوى الصفحة
+        </button>
+        <button id="a11y-stop" class="a11y-action-btn danger" type="button" disabled>
+          ⏹ إيقاف
+        </button>
+      </div>
+
       <div id="a11y-progress" class="a11y-progress hidden">
-        <div id="a11y-progress-bar" class="a11y-progress-bar"></div>
-        <span id="a11y-status" class="a11y-status">جاهز</span>
+        <span id="a11y-status" class="a11y-status"></span>
       </div>
     </div>
   </div>
 
   <script>
-    // Simple responsive nav toggle
+    // Responsive nav toggle
     const btn = document.querySelector('[data-nav-toggle]');
     const nav = document.querySelector('[data-nav]');
     if (btn && nav) {
@@ -145,7 +145,7 @@
       });
     }
 
-    // ===== Accessibility Toolbar Logic =====
+    // ===== Accessibility Toolbar =====
     (function() {
       const fab = document.getElementById('a11y-fab');
       const panel = document.getElementById('a11y-panel');
@@ -153,20 +153,25 @@
       const stopBtn = document.getElementById('a11y-stop');
       const closeBtn = document.getElementById('a11y-close');
       const progress = document.getElementById('a11y-progress');
-      const progressBar = document.getElementById('a11y-progress-bar');
       const statusEl = document.getElementById('a11y-status');
-
       if (!fab || !panel) return;
 
       let toolbarAudio = null;
       let toolbarPlaying = false;
 
-      // Toggle panel
+      function getCSRF() {
+        for (let c of document.cookie.split(';')) {
+          c = c.trim();
+          if (c.startsWith('csrftoken=')) return decodeURIComponent(c.substring(10));
+        }
+        return '';
+      }
+
       fab.addEventListener('click', () => {
-        const isHidden = panel.classList.contains('hidden');
+        const opening = panel.classList.contains('hidden');
         panel.classList.toggle('hidden');
-        fab.classList.toggle('active', isHidden);
-        fab.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        fab.classList.toggle('active', opening);
+        fab.setAttribute('aria-expanded', String(opening));
       });
 
       closeBtn.addEventListener('click', () => {
@@ -175,166 +180,110 @@
         fab.setAttribute('aria-expanded', 'false');
       });
 
-      // Voice selector highlight
-      panel.querySelectorAll('input[name="a11y-voice"]').forEach(radio => {
-        radio.addEventListener('change', () => {
+      panel.querySelectorAll('input[name="a11y-voice"]').forEach(r => {
+        r.addEventListener('change', () => {
           panel.querySelectorAll('.a11y-voice-option').forEach(l => l.classList.remove('selected'));
-          radio.closest('.a11y-voice-option')?.classList.add('selected');
+          r.closest('.a11y-voice-option')?.classList.add('selected');
         });
       });
 
       function getVoice() {
-        const checked = panel.querySelector('input[name="a11y-voice"]:checked');
-        return checked ? checked.value : 'female';
+        const c = panel.querySelector('input[name="a11y-voice"]:checked');
+        return c ? c.value : 'female';
       }
 
       function getPageText() {
         const main = document.getElementById('main');
         if (!main) return '';
-        // Get visible text from main content, skip scripts/styles
         const clone = main.cloneNode(true);
-        clone.querySelectorAll('script, style, nav, .a11y-toolbar').forEach(el => el.remove());
-        return (clone.textContent || clone.innerText || '').replace(/\s+/g, ' ').trim();
+        clone.querySelectorAll('script,style,nav,button,input,.a11y-toolbar,.breadcrumb,.back-link').forEach(el => el.remove());
+        return (clone.textContent || '').replace(/\s+/g, ' ').trim();
       }
 
-      function setStatus(msg) {
-        if (statusEl) statusEl.textContent = msg;
+      function setStatus(msg, autoHide) {
+        if (!statusEl || !progress) return;
+        statusEl.textContent = msg;
+        progress.classList.remove('hidden');
+        if (autoHide) setTimeout(() => progress.classList.add('hidden'), 3500);
       }
 
-      function showProgress(show) {
-        if (progress) progress.classList.toggle('hidden', !show);
-      }
-
-      // Read page content via backend TTS
       readBtn.addEventListener('click', async () => {
-        // Stop if already playing
-        if (toolbarPlaying && toolbarAudio) {
-          stopPlayback();
-          return;
-        }
+        if (toolbarPlaying) { stopPlayback(); return; }
 
         const text = getPageText();
-        if (!text) {
-          setStatus('لا يوجد محتوى للقراءة');
-          showProgress(true);
-          setTimeout(() => showProgress(false), 2000);
-          return;
-        }
+        if (!text) { setStatus('لا يوجد محتوى نصي في الصفحة', true); return; }
 
-        // Truncate to 2000 chars (API limit)
         const truncated = text.substring(0, 2000);
         const voice = getVoice();
 
         readBtn.disabled = true;
         stopBtn.disabled = false;
-        showProgress(true);
-        setStatus('⏳ جاري تحضير الصوت...');
-        progressBar.style.width = '30%';
+        readBtn.innerHTML = '⏳ جاري التحميل...';
+        readBtn.classList.add('loading');
 
         try {
-          // Get CSRF token
-          const csrfToken = (function() {
-            const cookies = document.cookie.split(';');
-            for (let c of cookies) {
-              c = c.trim();
-              if (c.startsWith('csrftoken=')) return decodeURIComponent(c.substring(10));
-            }
-            return '';
-          })();
-
-          const response = await fetch('/service/tts/synthesize/', {
+          const res = await fetch('/service/tts/synthesize/', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': csrfToken,
-            },
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRF() },
             body: JSON.stringify({ text: truncated, voice: voice }),
           });
-
-          progressBar.style.width = '60%';
-          const data = await response.json();
+          const data = await res.json();
 
           if (data.success && data.audio_url) {
-            progressBar.style.width = '80%';
             toolbarAudio = new Audio(data.audio_url);
 
             toolbarAudio.onplay = () => {
               toolbarPlaying = true;
-              setStatus('▶ جاري القراءة...');
-              progressBar.style.width = '100%';
               readBtn.innerHTML = '⏸ إيقاف مؤقت';
-            };
-
-            toolbarAudio.onended = () => {
-              toolbarPlaying = false;
-              toolbarAudio = null;
-              setStatus('✅ اكتملت القراءة');
-              readBtn.innerHTML = '🔊 قراءة الصفحة';
+              readBtn.classList.remove('loading');
+              readBtn.classList.add('playing');
               readBtn.disabled = false;
-              stopBtn.disabled = true;
-              setTimeout(() => showProgress(false), 2000);
+              setStatus('▶ جاري القراءة...');
             };
-
-            toolbarAudio.onerror = () => {
-              setStatus('❌ خطأ في تشغيل الصوت — جاري استخدام المتصفح...');
-              toolbarPlaying = false;
-              readBtn.innerHTML = '🔊 قراءة الصفحة';
-              readBtn.disabled = false;
-              stopBtn.disabled = true;
-              // Fallback to browser TTS
-              if (typeof playBrowserTTS === 'function') {
-                playBrowserTTS(truncated, voice, 'normal');
-              }
-            };
+            toolbarAudio.onended = () => { resetUI(); setStatus('✅ اكتملت القراءة', true); };
+            toolbarAudio.onerror = () => { resetUI(); doBrowserFallback(truncated, voice); };
 
             await toolbarAudio.play();
           } else {
-            throw new Error(data.error || 'فشل في تحضير الصوت');
+            throw new Error(data.error || 'فشل');
           }
-
         } catch (err) {
-          console.error('A11y TTS Error:', err);
-          setStatus('جاري استخدام محرك المتصفح...');
-          // Fallback to browser Speech API
-          if (typeof playBrowserTTS === 'function') {
-            playBrowserTTS(truncated, getVoice(), 'normal');
-          } else if ('speechSynthesis' in window) {
-            const utterance = new SpeechSynthesisUtterance(truncated);
-            utterance.lang = 'ar';
-            utterance.rate = 0.9;
-            speechSynthesis.speak(utterance);
-          }
-          readBtn.disabled = false;
-          stopBtn.disabled = true;
-          setTimeout(() => showProgress(false), 2000);
+          console.error('A11y TTS:', err);
+          resetUI();
+          doBrowserFallback(truncated, voice);
         }
       });
 
-      // Stop
-      stopBtn.addEventListener('click', () => {
-        stopPlayback();
-      });
+      stopBtn.addEventListener('click', stopPlayback);
 
       function stopPlayback() {
-        if (toolbarAudio) {
-          toolbarAudio.pause();
-          toolbarAudio.currentTime = 0;
-          toolbarAudio = null;
-        }
-        // Also stop browser speech
-        if ('speechSynthesis' in window) {
-          speechSynthesis.cancel();
-        }
-        // Also stop global tts.js audio
-        if (typeof stopTTS === 'function') {
-          stopTTS();
-        }
+        if (toolbarAudio) { toolbarAudio.pause(); toolbarAudio = null; }
+        if ('speechSynthesis' in window) speechSynthesis.cancel();
+        if (typeof stopTTS === 'function') stopTTS();
+        resetUI();
+        setStatus('⏹ تم الإيقاف', true);
+      }
+
+      function resetUI() {
         toolbarPlaying = false;
-        readBtn.innerHTML = '🔊 قراءة الصفحة';
+        toolbarAudio = null;
+        readBtn.innerHTML = '🔊 قراءة محتوى الصفحة';
+        readBtn.classList.remove('loading', 'playing');
         readBtn.disabled = false;
         stopBtn.disabled = true;
-        setStatus('تم الإيقاف');
-        setTimeout(() => showProgress(false), 1500);
+      }
+
+      function doBrowserFallback(text, voice) {
+        if (!('speechSynthesis' in window)) return;
+        setStatus('🔊 القراءة عبر محرك المتصفح');
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'ar'; u.rate = 0.9;
+        u.onend = () => { resetUI(); setStatus('✅ اكتملت القراءة', true); };
+        toolbarPlaying = true;
+        readBtn.innerHTML = '⏸ إيقاف مؤقت';
+        readBtn.classList.add('playing');
+        stopBtn.disabled = false;
+        speechSynthesis.speak(u);
       }
     })();
   </script>
