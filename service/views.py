@@ -5,6 +5,7 @@ from django.db.models import Q, Count
 from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
 from .forms import (
@@ -290,6 +291,7 @@ def glossary_list(request):
     return render(request, 'service/glossary_list.html', context)
 
 
+@ensure_csrf_cookie
 def glossary_detail(request, pk: int):
     """عرض تفاصيل المصطلح"""
     term = get_object_or_404(GlossaryTerm, pk=pk)

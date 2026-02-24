@@ -58,6 +58,9 @@
     </div>
   {% endif %}
 
+  <!-- Force CSRF cookie to be set on every page (needed for TTS AJAX) -->
+  <div style="display:none">{% csrf_token %}</div>
+
   <main id="main" class="container main">
     {% block content %}{% endblock %}
   </main>
