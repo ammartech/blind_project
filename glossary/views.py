@@ -2,11 +2,13 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .forms import TermForm
 from service.models import GlossaryTerm as Term
 
 
+@ensure_csrf_cookie
 def term_list(request):
     q = (request.GET.get('q') or '').strip()
     terms = Term.objects.all().order_by('term')
@@ -15,6 +17,7 @@ def term_list(request):
     return render(request, 'glossary/list.html', {'terms': terms, 'q': q})
 
 
+@ensure_csrf_cookie
 def term_detail(request, pk: int):
     term = get_object_or_404(Term, pk=pk)
     term.increment_view()
