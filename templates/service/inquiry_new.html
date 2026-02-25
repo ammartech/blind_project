@@ -9,11 +9,11 @@
     <span>استفسار جديد</span>
   </nav>
   <h1>إرسال استفسار جديد</h1>
-  <p class="muted">يمكنك كتابة سؤالك أو رفع ملف صوتي.</p>
+  <p class="muted">يمكنك كتابة سؤالك أو استخدام الإملاء الصوتي أو رفع ملف صوتي.</p>
 </div>
 
 <div class="card">
-  <form method="post" enctype="multipart/form-data" class="form">
+  <form method="post" enctype="multipart/form-data" class="form" id="inquiry-form">
     {% csrf_token %}
 
     {{ form.non_field_errors }}
@@ -29,7 +29,52 @@
       <label for="{{ form.question_text.id_for_label }}">نص السؤال</label>
       {{ form.question_text }}
       {{ form.question_text.errors }}
-      <p class="field-hint">اكتب سؤالك هنا، أو يمكنك رفع ملف صوتي بدلاً من ذلك</p>
+      <p class="field-hint">اكتب سؤالك هنا، أو استخدم الإملاء الصوتي أدناه، أو ارفع ملف صوتي</p>
+    </div>
+
+    <!-- ===== Voice Recognition (STT) Panel ===== -->
+    <div class="stt-panel card" id="stt-panel">
+      <h3>🎤 الإملاء الصوتي</h3>
+      <p class="hint">تحدث وسيتم تحويل كلامك إلى نص تلقائياً. يدعم العربية والإنجليزية.</p>
+
+      <!-- Language selector -->
+      <div class="tts-setting-group">
+        <span class="tts-setting-label">اللغة:</span>
+        <div class="voice-selector" role="radiogroup" aria-label="لغة الإملاء">
+          <label class="voice-option selected">
+            <input type="radio" name="stt-lang" value="ar-SA" checked>
+            <span>🇸🇦 العربية</span>
+          </label>
+          <label class="voice-option">
+            <input type="radio" name="stt-lang" value="en-US">
+            <span>🇺🇸 English</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- STT controls -->
+      <div class="stt-controls">
+        <button type="button" id="stt-start" class="btn primary stt-btn" aria-label="بدء التسجيل">
+          🎤 سجّل (سجل)
+        </button>
+        <button type="button" id="stt-stop" class="btn danger stt-btn" disabled aria-label="إيقاف التسجيل">
+          ⏹ توقّف (توقف)
+        </button>
+      </div>
+
+      <!-- Status indicator -->
+      <div id="stt-status" class="stt-status hidden" role="status" aria-live="polite">
+        <span class="stt-pulse"></span>
+        <span id="stt-status-text">جاهز</span>
+      </div>
+
+      <!-- Voice commands hint -->
+      <div class="stt-commands-hint">
+        <strong>الأوامر الصوتية:</strong>
+        <span class="stt-cmd">«سجّل»</span> لبدء التسجيل &nbsp;
+        <span class="stt-cmd">«توقّف»</span> لإيقاف التسجيل &nbsp;
+        <span class="stt-cmd">«أرسل»</span> لإرسال الاستفسار
+      </div>
     </div>
 
     <div class="form-row">
@@ -48,9 +93,241 @@
     </div>
 
     <div class="form-actions">
-      <button class="btn primary" type="submit">إرسال الاستفسار</button>
+      <button class="btn primary" type="submit" id="submit-btn">إرسال الاستفسار</button>
       <a class="btn outline" href="{% url 'service:dashboard' %}">إلغاء</a>
     </div>
   </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    // Hide STT panel if not supported
+    const panel = document.getElementById('stt-panel');
+    if (panel) {
+      panel.innerHTML = '<p class="hint">⚠️ المتصفح لا يدعم التعرف على الصوت. يرجى استخدام Chrome أو Edge.</p>';
+    }
+    return;
+  }
+
+  const startBtn = document.getElementById('stt-start');
+  const stopBtn = document.getElementById('stt-stop');
+  const statusDiv = document.getElementById('stt-status');
+  const statusText = document.getElementById('stt-status-text');
+  const textArea = document.getElementById('{{ form.question_text.id_for_label }}');
+  const submitBtn = document.getElementById('submit-btn');
+  const form = document.getElementById('inquiry-form');
+
+  let recognition = null;
+  let isListening = false;
+  let commandMode = false; // Always-on listener for voice commands
+
+  // ──── Voice selector sync ────
+  document.querySelectorAll('input[name="stt-lang"]').forEach(r => {
+    r.addEventListener('change', function() {
+      document.querySelectorAll('[name="stt-lang"]').forEach(radio => {
+        radio.closest('.voice-option')?.classList.remove('selected');
+      });
+      this.closest('.voice-option')?.classList.add('selected');
+      // Update recognition language if active
+      if (recognition && isListening) {
+        stopListening();
+        setTimeout(startListening, 300);
+      }
+    });
+  });
+
+  function getLang() {
+    const el = document.querySelector('input[name="stt-lang"]:checked');
+    return el ? el.value : 'ar-SA';
+  }
+
+  // ──── Core STT ────
+  function createRecognition() {
+    const rec = new SpeechRecognition();
+    rec.lang = getLang();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    return rec;
+  }
+
+  function startListening() {
+    if (isListening) return;
+
+    recognition = createRecognition();
+
+    recognition.onstart = () => {
+      isListening = true;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      startBtn.classList.add('recording');
+      statusDiv.classList.remove('hidden');
+      statusText.textContent = '🔴 جاري الاستماع... تحدث الآن';
+    };
+
+    recognition.onresult = (e) => {
+      let interim = '';
+      let final = '';
+
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const transcript = e.results[i][0].transcript;
+        if (e.results[i].isFinal) {
+          final += transcript;
+        } else {
+          interim += transcript;
+        }
+      }
+
+      // Check for voice commands in final text
+      if (final) {
+        const cmd = checkVoiceCommand(final.trim());
+        if (cmd) return; // Command handled, don't add to text
+
+        // Append to text area
+        const current = textArea.value;
+        const sep = current && !current.endsWith(' ') && !current.endsWith('\n') ? ' ' : '';
+        textArea.value = current + sep + final.trim();
+        textArea.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      // Show interim in status
+      if (interim) {
+        statusText.textContent = '🔴 ' + interim;
+      }
+    };
+
+    recognition.onerror = (e) => {
+      console.error('STT Error:', e.error);
+      if (e.error === 'no-speech') {
+        statusText.textContent = '⚠️ لم يتم رصد كلام. حاول مرة أخرى.';
+      } else if (e.error === 'not-allowed') {
+        statusText.textContent = '⚠️ يرجى السماح بالوصول إلى الميكروفون.';
+      } else {
+        statusText.textContent = '⚠️ خطأ: ' + e.error;
+      }
+      setTimeout(() => { if (!isListening) statusDiv.classList.add('hidden'); }, 3000);
+    };
+
+    recognition.onend = () => {
+      // Auto-restart if still supposed to be listening
+      if (isListening) {
+        try { recognition.start(); } catch(e) { stopListening(); }
+        return;
+      }
+      stopListening();
+    };
+
+    try {
+      recognition.start();
+    } catch(e) {
+      statusText.textContent = '⚠️ تعذر بدء التعرف على الصوت.';
+      statusDiv.classList.remove('hidden');
+    }
+  }
+
+  function stopListening() {
+    isListening = false;
+    if (recognition) {
+      try { recognition.stop(); } catch(e) {}
+      recognition = null;
+    }
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    startBtn.classList.remove('recording');
+    statusText.textContent = '⏹ تم إيقاف التسجيل';
+    setTimeout(() => statusDiv.classList.add('hidden'), 2000);
+  }
+
+  // ──── Voice commands ────
+  function checkVoiceCommand(text) {
+    const normalized = text.replace(/[ًٌٍَُِّْ]/g, '').trim();
+
+    // "سجل" variants → start recording
+    if (/^(سجل|سجّل|ابدأ التسجيل|ابدأ|record|start)/i.test(normalized)) {
+      startListening();
+      return true;
+    }
+    // "توقف" variants → stop recording
+    if (/^(توقف|توقّف|قف|وقف|stop)/i.test(normalized)) {
+      stopListening();
+      return true;
+    }
+    // "أرسل" variants → submit form
+    if (/^(أرسل|ارسل|إرسال|ابعث|send|submit)/i.test(normalized)) {
+      stopListening();
+      statusText.textContent = '📤 جاري إرسال الاستفسار...';
+      statusDiv.classList.remove('hidden');
+      setTimeout(() => form.submit(), 500);
+      return true;
+    }
+    return false;
+  }
+
+  // ──── Button handlers ────
+  startBtn.addEventListener('click', startListening);
+  stopBtn.addEventListener('click', stopListening);
+
+  // ──── Always-on command listener ────
+  // A lightweight listener that just waits for voice commands even when not in dictation mode
+  let commandRecognition = null;
+
+  function startCommandListener() {
+    if (!SpeechRecognition) return;
+    if (commandRecognition) return;
+
+    commandRecognition = new SpeechRecognition();
+    commandRecognition.lang = 'ar-SA';
+    commandRecognition.continuous = true;
+    commandRecognition.interimResults = false;
+
+    commandRecognition.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          const text = e.results[i][0].transcript.trim();
+          // Only handle commands, not dictation
+          if (!isListening) {
+            checkVoiceCommand(text);
+          }
+        }
+      }
+    };
+
+    commandRecognition.onend = () => {
+      // Restart if not in full dictation mode
+      if (!isListening && commandRecognition) {
+        try { commandRecognition.start(); } catch(e) {}
+      }
+    };
+
+    commandRecognition.onerror = () => {
+      // Silently restart
+      if (!isListening) {
+        setTimeout(() => {
+          if (commandRecognition) {
+            try { commandRecognition.start(); } catch(e) {}
+          }
+        }, 1000);
+      }
+    };
+
+    // Don't auto-start command listener - it requires user gesture
+    // Instead, start it on first interaction with the page
+  }
+
+  // Start command listener on first click anywhere on the page
+  let commandListenerStarted = false;
+  document.addEventListener('click', function initCommandListener() {
+    if (commandListenerStarted) return;
+    commandListenerStarted = true;
+    startCommandListener();
+    if (commandRecognition && !isListening) {
+      try { commandRecognition.start(); } catch(e) {}
+    }
+  }, { once: false });
+})();
+</script>
 {% endblock %}
