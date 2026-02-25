@@ -361,69 +361,220 @@
       }
     })();
 
-    // ===== Auto-Read on Mouse Idle (20s) =====
+    // ===== Auto-Read on Mouse Idle (20s) — once per page load =====
     (function() {
-      const IDLE_TIMEOUT = 20000; // 20 seconds
+      const IDLE_TIMEOUT = 20000;
       let idleTimer = null;
-      let hasAutoRead = false; // Only auto-read once per page load
+      let hasAutoRead = false; // True once fired; NEVER resets — one read per page load
       let userInteracted = false;
+      let autoReadAborted = false;
 
-      function resetIdleTimer() {
+      // ── CSRF helper ──
+      function csrf() {
+        for (let c of document.cookie.split(';')) {
+          c = c.trim();
+          if (c.startsWith('csrftoken=')) return decodeURIComponent(c.substring(10));
+        }
+        return '';
+      }
+
+      // ── Extract sections [{label, text}] from main content ──
+      function extractSections() {
+        const main = document.getElementById('main');
+        if (!main) return [];
+
+        const clone = main.cloneNode(true);
+        // Remove noise
+        clone.querySelectorAll([
+          'script', 'style', 'button', 'input', 'select', 'label',
+          'nav', 'form', '.breadcrumb', '.back-link', '.stt-panel',
+          '.tts-settings', '.tts-actions', '.tts-controls', '.form-actions',
+          '.stats-card', '.term-stats', '.filter-form', '.filter-row',
+          '.pagination', '.actions-bar', '.actions-card', '.meta-badges',
+          '.meta-info', '.inquiry-badges', '.welcome-actions', '.stats-grid'
+        ].join(',')).forEach(el => el.remove());
+
+        // Walk headings + following content
+        const nodes = Array.from(clone.querySelectorAll(
+          'h1, h2, h3, p, .para, .definition-text, .hint, li, .inquiry-preview, ' +
+          '.empty-state, .stat-content, .tip-icon + span, .inquiry-title'
+        ));
+
+        const sections = [];
+        let current = null;
+
+        for (const node of nodes) {
+          const tag = node.tagName?.toLowerCase();
+          if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
+            if (current && (current.label || current.text.trim())) {
+              sections.push(current);
+            }
+            current = { label: node.textContent.trim(), text: '' };
+          } else if (current) {
+            const t = node.textContent.trim();
+            if (t && t !== current.label) {
+              current.text += t + '. ';
+            }
+          } else {
+            // Content before any heading
+            const t = node.textContent.trim();
+            if (t) {
+              current = { label: '', text: t + '. ' };
+            }
+          }
+        }
+        if (current && (current.label || current.text.trim())) sections.push(current);
+
+        // Fallback: if no structured sections found, use full page text
+        if (!sections.length) {
+          const text = clone.textContent.replace(/\s+/g, ' ').trim();
+          if (text) sections.push({ label: '', text });
+        }
+        return sections;
+      }
+
+      // ── Speak one chunk via AI backend, returns Promise ──
+      function speakChunk(text) {
+        return new Promise((resolve) => {
+          if (autoReadAborted || !text.trim()) { resolve(); return; }
+
+          const voice = document.querySelector('input[name="a11y-voice"]:checked')?.value || 'female';
+          const speed = document.querySelector('input[name="a11y-speed"]:checked')?.value || 'normal';
+          const engine = document.querySelector('input[name="a11y-engine"]:checked')?.value || 'ai';
+
+          if (engine === 'browser') {
+            // Browser speech synthesis
+            if (!('speechSynthesis' in window)) { resolve(); return; }
+            const u = new SpeechSynthesisUtterance(text.substring(0, 2000));
+            u.lang = 'ar';
+            const rateMap = { slow: 0.7, normal: 0.9, fast: 1.4 };
+            u.rate = rateMap[speed] || 0.9;
+            u.onend = u.onerror = resolve;
+            speechSynthesis.speak(u);
+            return;
+          }
+
+          // AI engine
+          fetch('/service/tts/synthesize/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+            body: JSON.stringify({ text: text.substring(0, 2000), voice, speed }),
+          })
+          .then(r => r.json())
+          .then(data => {
+            if (autoReadAborted || !data.success || !data.audio_url) { resolve(); return; }
+            const audio = new Audio(data.audio_url);
+            audio.onended = resolve;
+            audio.onerror = () => {
+              // fallback browser speech
+              if ('speechSynthesis' in window) {
+                const u = new SpeechSynthesisUtterance(text.substring(0, 2000));
+                u.lang = 'ar'; u.rate = 0.9;
+                u.onend = u.onerror = resolve;
+                speechSynthesis.speak(u);
+              } else resolve();
+            };
+            audio.play().catch(resolve);
+          })
+          .catch(resolve);
+        });
+      }
+
+      // ── Update the indicator label ──
+      function setIndicatorText(text) {
+        const el = document.getElementById('autoread-indicator');
+        const span = el?.querySelector('.autoread-text');
+        if (el && span) {
+          el.classList.remove('hidden');
+          span.textContent = text;
+        }
+      }
+
+      function hideIndicator() {
+        const el = document.getElementById('autoread-indicator');
+        if (el) el.classList.add('hidden');
+      }
+
+      // ── Main auto-read: read page section by section ──
+      async function triggerAutoRead() {
+        autoReadAborted = false;
+
+        const sections = extractSections();
+        if (!sections.length) return;
+
+        // Open toolbar panel so user can see controls
+        const panel = document.getElementById('a11y-panel');
+        const fab = document.getElementById('a11y-fab');
+        if (panel?.classList.contains('hidden')) {
+          panel.classList.remove('hidden');
+          fab?.classList.add('active');
+          fab?.setAttribute('aria-expanded', 'true');
+        }
+
+        // Mark stop button active
+        const stopBtn = document.getElementById('a11y-stop');
+        if (stopBtn) stopBtn.disabled = false;
+
+        for (let i = 0; i < sections.length; i++) {
+          if (autoReadAborted) break;
+          const { label, text } = sections[i];
+
+          // Update indicator with section title
+          const display = label || `القسم ${i + 1}`;
+          setIndicatorText(`📖 ${display}`);
+
+          // Read heading, then content
+          if (label) await speakChunk(label);
+          if (!autoReadAborted && text.trim()) await speakChunk(text.trim());
+        }
+
+        if (!autoReadAborted) setIndicatorText('✅ اكتملت القراءة');
+        setTimeout(hideIndicator, 3000);
+
+        if (stopBtn) stopBtn.disabled = true;
+      }
+
+      // ── Stop auto-read from stop button ──
+      document.addEventListener('DOMContentLoaded', () => {
+        const stopBtn = document.getElementById('a11y-stop');
+        if (stopBtn) {
+          const origClick = stopBtn.onclick;
+          stopBtn.addEventListener('click', () => {
+            autoReadAborted = true;
+            if ('speechSynthesis' in window) speechSynthesis.cancel();
+            hideIndicator();
+          });
+        }
+      });
+
+      // ── Idle tracking — hasAutoRead never resets ──
+      function startIdleTimer() {
         if (idleTimer) clearTimeout(idleTimer);
-        hasAutoRead = false; // Reset when user moves again
-        if (!userInteracted) return;
+        if (hasAutoRead) return; // Already fired this page load — never again
 
         idleTimer = setTimeout(() => {
-          // Don't auto-read if already playing, or on form pages, or already read
           if (hasAutoRead) return;
           if (typeof isPlaying !== 'undefined' && isPlaying) return;
           if (document.querySelector('.stt-panel, form.form')) return;
 
-          hasAutoRead = true;
+          hasAutoRead = true; // Lock — will never reset
           triggerAutoRead();
         }, IDLE_TIMEOUT);
       }
 
-      function triggerAutoRead() {
-        // Show a brief notification
-        const indicator = document.getElementById('autoread-indicator');
-        if (indicator) {
-          indicator.classList.remove('hidden');
-          indicator.querySelector('.autoread-text').textContent = '📖 القراءة التلقائية...';
-        }
-
-        // Click the toolbar read button if available
-        const readBtn = document.getElementById('a11y-read-page');
-        if (readBtn && !readBtn.disabled) {
-          // Open the panel first so user can see what's happening
-          const panel = document.getElementById('a11y-panel');
-          const fab = document.getElementById('a11y-fab');
-          if (panel && panel.classList.contains('hidden')) {
-            panel.classList.remove('hidden');
-            if (fab) { fab.classList.add('active'); fab.setAttribute('aria-expanded', 'true'); }
-          }
-          readBtn.click();
-        }
-
-        // Hide indicator after a bit
-        setTimeout(() => {
-          if (indicator) indicator.classList.add('hidden');
-        }, 4000);
-      }
-
-      // Track mouse/touch/keyboard activity
+      // Reset timer on activity (but NOT hasAutoRead)
       ['mousemove', 'mousedown', 'touchstart', 'keydown', 'scroll'].forEach(evt => {
         document.addEventListener(evt, () => {
           userInteracted = true;
-          resetIdleTimer();
+          if (!hasAutoRead) startIdleTimer(); // Only restart if not yet fired
         }, { passive: true });
       });
 
-      // Start idle tracking after page load
+      // Start on page load
       document.addEventListener('DOMContentLoaded', () => {
-        // Don't enable on form-heavy pages (inquiry new, edit, etc.)
-        if (document.querySelector('form.form, .stt-panel')) return;
-        resetIdleTimer();
+        if (document.querySelector('form.form, .stt-panel')) return; // Skip form pages
+        // Kick off immediately — user activity will reset the timer
+        startIdleTimer();
       });
     })();
   </script>
