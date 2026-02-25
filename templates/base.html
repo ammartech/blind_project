@@ -93,6 +93,11 @@
     </div>
   </footer>
 
+  <!-- Auto-read idle indicator -->
+  <div id="autoread-indicator" class="autoread-indicator hidden" role="status" aria-live="polite">
+    <span class="autoread-text">📖 القراءة التلقائية...</span>
+  </div>
+
   <!-- ===== Global Accessibility TTS Toolbar ===== -->
   <div id="a11y-toolbar" class="a11y-toolbar" role="region" aria-label="شريط القراءة الصوتية">
     <button id="a11y-fab" class="a11y-fab" type="button"
@@ -354,6 +359,72 @@
         stopBtn.disabled = false;
         speechSynthesis.speak(u);
       }
+    })();
+
+    // ===== Auto-Read on Mouse Idle (20s) =====
+    (function() {
+      const IDLE_TIMEOUT = 20000; // 20 seconds
+      let idleTimer = null;
+      let hasAutoRead = false; // Only auto-read once per page load
+      let userInteracted = false;
+
+      function resetIdleTimer() {
+        if (idleTimer) clearTimeout(idleTimer);
+        hasAutoRead = false; // Reset when user moves again
+        if (!userInteracted) return;
+
+        idleTimer = setTimeout(() => {
+          // Don't auto-read if already playing, or on form pages, or already read
+          if (hasAutoRead) return;
+          if (typeof isPlaying !== 'undefined' && isPlaying) return;
+          if (document.querySelector('.stt-panel, form.form')) return;
+
+          hasAutoRead = true;
+          triggerAutoRead();
+        }, IDLE_TIMEOUT);
+      }
+
+      function triggerAutoRead() {
+        // Show a brief notification
+        const indicator = document.getElementById('autoread-indicator');
+        if (indicator) {
+          indicator.classList.remove('hidden');
+          indicator.querySelector('.autoread-text').textContent = '📖 القراءة التلقائية...';
+        }
+
+        // Click the toolbar read button if available
+        const readBtn = document.getElementById('a11y-read-page');
+        if (readBtn && !readBtn.disabled) {
+          // Open the panel first so user can see what's happening
+          const panel = document.getElementById('a11y-panel');
+          const fab = document.getElementById('a11y-fab');
+          if (panel && panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            if (fab) { fab.classList.add('active'); fab.setAttribute('aria-expanded', 'true'); }
+          }
+          readBtn.click();
+        }
+
+        // Hide indicator after a bit
+        setTimeout(() => {
+          if (indicator) indicator.classList.add('hidden');
+        }, 4000);
+      }
+
+      // Track mouse/touch/keyboard activity
+      ['mousemove', 'mousedown', 'touchstart', 'keydown', 'scroll'].forEach(evt => {
+        document.addEventListener(evt, () => {
+          userInteracted = true;
+          resetIdleTimer();
+        }, { passive: true });
+      });
+
+      // Start idle tracking after page load
+      document.addEventListener('DOMContentLoaded', () => {
+        // Don't enable on form-heavy pages (inquiry new, edit, etc.)
+        if (document.querySelector('form.form, .stt-panel')) return;
+        resetIdleTimer();
+      });
     })();
   </script>
 </body>

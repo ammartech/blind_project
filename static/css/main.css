@@ -1863,3 +1863,130 @@ textarea.input{
     flex-direction: column;
   }
 }
+
+/* ============================================
+ *  Speech-to-Text (STT) Panel
+ *  ============================================ */
+.stt-panel{
+  border: 1px solid rgba(30,78,216,.2);
+  background: rgba(30,78,216,.03);
+}
+
+.stt-panel h3{
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+}
+
+.stt-controls{
+  display: flex;
+  gap: 10px;
+  margin: 14px 0;
+  flex-wrap: wrap;
+}
+
+.stt-btn{
+  min-width: 140px;
+  justify-content: center;
+}
+
+.stt-btn.recording{
+  background: #D72638;
+  border-color: #D72638;
+  color: #fff;
+  animation: stt-recording 1.2s ease-in-out infinite;
+}
+
+@keyframes stt-recording{
+  0%, 100%{ box-shadow: 0 0 0 0 rgba(215,38,56,.4); }
+  50%{ box-shadow: 0 0 0 10px rgba(215,38,56,.0); }
+}
+
+.stt-status{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(30,78,216,.06);
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.stt-status.hidden{
+  display: none;
+}
+
+.stt-pulse{
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #D72638;
+  animation: stt-pulse-dot 1s ease-in-out infinite;
+}
+
+@keyframes stt-pulse-dot{
+  0%, 100%{ opacity: 1; transform: scale(1); }
+  50%{ opacity: 0.4; transform: scale(0.7); }
+}
+
+.stt-commands-hint{
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(242,183,5,.08);
+  border: 1px solid rgba(242,183,5,.2);
+  font-size: 0.85rem;
+  line-height: 2;
+  color: var(--muted);
+}
+
+.stt-cmd{
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 8px;
+  background: var(--gold);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+/* ============================================
+ *  Auto-Read Idle Indicator
+ *  ============================================ */
+.autoread-indicator{
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  padding: 10px 24px;
+  border-radius: 30px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 600;
+  box-shadow: 0 6px 24px rgba(30,78,216,.35);
+  animation: autoread-slide-in 0.4s ease;
+}
+
+.autoread-indicator.hidden{
+  display: none;
+}
+
+@keyframes autoread-slide-in{
+  from{ opacity: 0; transform: translateX(-50%) translateY(-20px); }
+  to{ opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Responsive: STT */
+@media (max-width: 480px){
+  .stt-controls{
+    flex-direction: column;
+  }
+  .stt-btn{
+    width: 100%;
+  }
+  .stt-commands-hint{
+    font-size: 0.8rem;
+  }
+}
