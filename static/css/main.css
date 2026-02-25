@@ -1885,7 +1885,7 @@ textarea.input{
 }
 
 .stt-btn{
-  min-width: 140px;
+  min-width: 120px;
   justify-content: center;
 }
 
@@ -1950,6 +1950,94 @@ textarea.input{
   font-size: 0.82rem;
 }
 
+/* ── Field label row (label + inline mic) ── */
+.field-label-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ── Inline mic button next to field labels ── */
+.stt-inline-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid rgba(30,78,216,.25);
+  background: rgba(30,78,216,.06);
+  color: var(--blue);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.stt-inline-btn:hover{
+  background: rgba(30,78,216,.15);
+  border-color: var(--blue);
+  transform: scale(1.1);
+}
+
+.stt-inline-btn.active{
+  background: #D72638;
+  border-color: #D72638;
+  color: #fff;
+  animation: stt-recording 1.2s ease-in-out infinite;
+}
+
+/* ── Active field highlight during recording ── */
+.stt-active-field{
+  position: relative;
+}
+
+.stt-active-field::before{
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 18px;
+  border: 2px solid rgba(30,78,216,.4);
+  background: rgba(30,78,216,.03);
+  pointer-events: none;
+  animation: stt-field-glow 2s ease-in-out infinite;
+}
+
+@keyframes stt-field-glow{
+  0%, 100%{ box-shadow: 0 0 0 0 rgba(30,78,216,.15); }
+  50%{ box-shadow: 0 0 12px 4px rgba(30,78,216,.12); }
+}
+
+/* ── Target indicator ── */
+.stt-target-indicator{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin: 10px 0;
+  border-radius: 10px;
+  background: rgba(30,78,216,.08);
+  border: 1px solid rgba(30,78,216,.15);
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.stt-target-icon{
+  font-size: 1.1rem;
+}
+
+/* ── Target option styling ── */
+.stt-target-option{
+  position: relative;
+}
+
+.stt-target-option.selected{
+  border-color: var(--blue);
+  background: rgba(30,78,216,.12);
+  font-weight: 700;
+}
+
 /* ============================================
  *  Auto-Read Idle Indicator
  *  ============================================ */
@@ -1988,5 +2076,13 @@ textarea.input{
   }
   .stt-commands-hint{
     font-size: 0.8rem;
+  }
+  .field-label-row{
+    flex-wrap: wrap;
+  }
+  .stt-inline-btn{
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
   }
 }

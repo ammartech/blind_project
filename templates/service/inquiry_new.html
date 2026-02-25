@@ -18,15 +18,27 @@
 
     {{ form.non_field_errors }}
 
-    <div class="form-row">
-      <label for="{{ form.title.id_for_label }}">عنوان الاستفسار *</label>
+    <!-- ===== Title Field with inline mic ===== -->
+    <div class="form-row" id="field-row-title">
+      <div class="field-label-row">
+        <label for="{{ form.title.id_for_label }}">عنوان الاستفسار *</label>
+        <button type="button" class="stt-inline-btn" data-stt-target="title" aria-label="إملاء العنوان صوتياً" title="إملاء العنوان صوتياً">
+          🎤
+        </button>
+      </div>
       {{ form.title }}
       {{ form.title.errors }}
       <p class="field-hint">اكتب عنواناً مختصراً يصف سؤالك</p>
     </div>
 
-    <div class="form-row">
-      <label for="{{ form.question_text.id_for_label }}">نص السؤال</label>
+    <!-- ===== Question Text Field with inline mic ===== -->
+    <div class="form-row" id="field-row-question">
+      <div class="field-label-row">
+        <label for="{{ form.question_text.id_for_label }}">نص السؤال</label>
+        <button type="button" class="stt-inline-btn" data-stt-target="question" aria-label="إملاء السؤال صوتياً" title="إملاء السؤال صوتياً">
+          🎤
+        </button>
+      </div>
       {{ form.question_text }}
       {{ form.question_text.errors }}
       <p class="field-hint">اكتب سؤالك هنا، أو استخدم الإملاء الصوتي أدناه، أو ارفع ملف صوتي</p>
@@ -35,7 +47,22 @@
     <!-- ===== Voice Recognition (STT) Panel ===== -->
     <div class="stt-panel card" id="stt-panel">
       <h3>🎤 الإملاء الصوتي</h3>
-      <p class="hint">تحدث وسيتم تحويل كلامك إلى نص تلقائياً. يدعم العربية والإنجليزية.</p>
+      <p class="hint">تحدث وسيتم تحويل كلامك إلى نص تلقائياً. اختر الحقل المستهدف ثم ابدأ التسجيل.</p>
+
+      <!-- Target field selector -->
+      <div class="tts-setting-group">
+        <span class="tts-setting-label">الحقل المستهدف:</span>
+        <div class="voice-selector" role="radiogroup" aria-label="الحقل المستهدف للإملاء">
+          <label class="voice-option stt-target-option" id="stt-target-title">
+            <input type="radio" name="stt-target" value="title">
+            <span>📝 العنوان</span>
+          </label>
+          <label class="voice-option stt-target-option selected" id="stt-target-question">
+            <input type="radio" name="stt-target" value="question" checked>
+            <span>💬 نص السؤال</span>
+          </label>
+        </div>
+      </div>
 
       <!-- Language selector -->
       <div class="tts-setting-group">
@@ -55,11 +82,20 @@
       <!-- STT controls -->
       <div class="stt-controls">
         <button type="button" id="stt-start" class="btn primary stt-btn" aria-label="بدء التسجيل">
-          🎤 سجّل (سجل)
+          🎤 ابدأ التسجيل
         </button>
         <button type="button" id="stt-stop" class="btn danger stt-btn" disabled aria-label="إيقاف التسجيل">
-          ⏹ توقّف (توقف)
+          ⏹ إيقاف
         </button>
+        <button type="button" id="stt-clear" class="btn outline stt-btn" aria-label="مسح الحقل">
+          🗑️ مسح الحقل
+        </button>
+      </div>
+
+      <!-- Active target indicator -->
+      <div id="stt-target-indicator" class="stt-target-indicator">
+        <span class="stt-target-icon">🎯</span>
+        <span id="stt-target-label">الإملاء في: <strong>نص السؤال</strong></span>
       </div>
 
       <!-- Status indicator -->
@@ -70,9 +106,12 @@
 
       <!-- Voice commands hint -->
       <div class="stt-commands-hint">
-        <strong>الأوامر الصوتية:</strong>
+        <strong>الأوامر الصوتية:</strong><br>
+        <span class="stt-cmd">«عنوان»</span> للكتابة في العنوان &nbsp;
+        <span class="stt-cmd">«سؤال»</span> للكتابة في نص السؤال &nbsp;
         <span class="stt-cmd">«سجّل»</span> لبدء التسجيل &nbsp;
         <span class="stt-cmd">«توقّف»</span> لإيقاف التسجيل &nbsp;
+        <span class="stt-cmd">«امسح»</span> لمسح الحقل &nbsp;
         <span class="stt-cmd">«أرسل»</span> لإرسال الاستفسار
       </div>
     </div>
@@ -105,34 +144,101 @@
 (function() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    // Hide STT panel if not supported
     const panel = document.getElementById('stt-panel');
     if (panel) {
       panel.innerHTML = '<p class="hint">⚠️ المتصفح لا يدعم التعرف على الصوت. يرجى استخدام Chrome أو Edge.</p>';
     }
+    document.querySelectorAll('.stt-inline-btn').forEach(b => b.style.display = 'none');
     return;
   }
 
+  // ──── DOM refs ────
   const startBtn = document.getElementById('stt-start');
   const stopBtn = document.getElementById('stt-stop');
+  const clearBtn = document.getElementById('stt-clear');
   const statusDiv = document.getElementById('stt-status');
   const statusText = document.getElementById('stt-status-text');
-  const textArea = document.getElementById('{{ form.question_text.id_for_label }}');
+  const targetIndicator = document.getElementById('stt-target-indicator');
+  const targetLabel = document.getElementById('stt-target-label');
   const submitBtn = document.getElementById('submit-btn');
   const form = document.getElementById('inquiry-form');
 
+  // Field references
+  const fields = {
+    title: document.getElementById('id_title'),
+    question: document.getElementById('id_question_text')
+  };
+  const fieldRows = {
+    title: document.getElementById('field-row-title'),
+    question: document.getElementById('field-row-question')
+  };
+  const fieldNames = {
+    title: 'العنوان',
+    question: 'نص السؤال'
+  };
+
   let recognition = null;
   let isListening = false;
-  let commandMode = false; // Always-on listener for voice commands
+  let activeTarget = 'question'; // default target
 
-  // ──── Voice selector sync ────
+  // ──── Target field management ────
+  function setTarget(target) {
+    if (!fields[target]) return;
+    activeTarget = target;
+
+    // Update radio buttons
+    document.querySelectorAll('input[name="stt-target"]').forEach(r => {
+      r.closest('.stt-target-option')?.classList.remove('selected');
+      if (r.value === target) {
+        r.checked = true;
+        r.closest('.stt-target-option')?.classList.add('selected');
+      }
+    });
+
+    // Update indicator
+    targetLabel.innerHTML = 'الإملاء في: <strong>' + fieldNames[target] + '</strong>';
+
+    // Highlight active field row
+    Object.values(fieldRows).forEach(row => row?.classList.remove('stt-active-field'));
+    fieldRows[target]?.classList.add('stt-active-field');
+
+    // Focus the field
+    fields[target]?.focus();
+
+    if (isListening) {
+      statusText.textContent = '🔴 جاري الاستماع — ' + fieldNames[target];
+    }
+  }
+
+  function getActiveField() {
+    return fields[activeTarget] || fields.question;
+  }
+
+  // ──── Target selector sync ────
+  document.querySelectorAll('input[name="stt-target"]').forEach(r => {
+    r.addEventListener('change', function() {
+      setTarget(this.value);
+    });
+  });
+
+  // ──── Inline mic buttons ────
+  document.querySelectorAll('.stt-inline-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const target = this.dataset.sttTarget;
+      setTarget(target);
+      if (!isListening) {
+        startListening();
+      }
+    });
+  });
+
+  // ──── Language selector sync ────
   document.querySelectorAll('input[name="stt-lang"]').forEach(r => {
     r.addEventListener('change', function() {
       document.querySelectorAll('[name="stt-lang"]').forEach(radio => {
         radio.closest('.voice-option')?.classList.remove('selected');
       });
       this.closest('.voice-option')?.classList.add('selected');
-      // Update recognition language if active
       if (recognition && isListening) {
         stopListening();
         setTimeout(startListening, 300);
@@ -166,37 +272,44 @@
       stopBtn.disabled = false;
       startBtn.classList.add('recording');
       statusDiv.classList.remove('hidden');
-      statusText.textContent = '🔴 جاري الاستماع... تحدث الآن';
+      statusText.textContent = '🔴 جاري الاستماع — ' + fieldNames[activeTarget];
+
+      // Highlight active field
+      fieldRows[activeTarget]?.classList.add('stt-active-field');
+
+      // Highlight inline button
+      document.querySelectorAll('.stt-inline-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.sttTarget === activeTarget);
+      });
     };
 
     recognition.onresult = (e) => {
       let interim = '';
-      let final = '';
+      let finalText = '';
 
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const transcript = e.results[i][0].transcript;
         if (e.results[i].isFinal) {
-          final += transcript;
+          finalText += transcript;
         } else {
           interim += transcript;
         }
       }
 
-      // Check for voice commands in final text
-      if (final) {
-        const cmd = checkVoiceCommand(final.trim());
-        if (cmd) return; // Command handled, don't add to text
+      if (finalText) {
+        const cmd = checkVoiceCommand(finalText.trim());
+        if (cmd) return;
 
-        // Append to text area
-        const current = textArea.value;
+        // Append to the active target field
+        const field = getActiveField();
+        const current = field.value;
         const sep = current && !current.endsWith(' ') && !current.endsWith('\n') ? ' ' : '';
-        textArea.value = current + sep + final.trim();
-        textArea.dispatchEvent(new Event('input', { bubbles: true }));
+        field.value = current + sep + finalText.trim();
+        field.dispatchEvent(new Event('input', { bubbles: true }));
       }
 
-      // Show interim in status
       if (interim) {
-        statusText.textContent = '🔴 ' + interim;
+        statusText.textContent = '🔴 [' + fieldNames[activeTarget] + '] ' + interim;
       }
     };
 
@@ -213,7 +326,6 @@
     };
 
     recognition.onend = () => {
-      // Auto-restart if still supposed to be listening
       if (isListening) {
         try { recognition.start(); } catch(e) { stopListening(); }
         return;
@@ -240,23 +352,47 @@
     startBtn.classList.remove('recording');
     statusText.textContent = '⏹ تم إيقاف التسجيل';
     setTimeout(() => statusDiv.classList.add('hidden'), 2000);
+
+    // Remove field highlights
+    Object.values(fieldRows).forEach(row => row?.classList.remove('stt-active-field'));
+    document.querySelectorAll('.stt-inline-btn').forEach(b => b.classList.remove('active'));
   }
 
   // ──── Voice commands ────
   function checkVoiceCommand(text) {
     const normalized = text.replace(/[ًٌٍَُِّْ]/g, '').trim();
 
-    // "سجل" variants → start recording
+    // "عنوان" → switch to title field
+    if (/^(عنوان|العنوان|title)/i.test(normalized)) {
+      setTarget('title');
+      statusText.textContent = '🎯 تم التبديل إلى: العنوان';
+      return true;
+    }
+    // "سؤال" / "نص" → switch to question text field
+    if (/^(سؤال|السؤال|نص|النص|question|text)/i.test(normalized)) {
+      setTarget('question');
+      statusText.textContent = '🎯 تم التبديل إلى: نص السؤال';
+      return true;
+    }
+    // "سجل" → start recording
     if (/^(سجل|سجّل|ابدأ التسجيل|ابدأ|record|start)/i.test(normalized)) {
       startListening();
       return true;
     }
-    // "توقف" variants → stop recording
+    // "توقف" → stop recording
     if (/^(توقف|توقّف|قف|وقف|stop)/i.test(normalized)) {
       stopListening();
       return true;
     }
-    // "أرسل" variants → submit form
+    // "امسح" → clear active field
+    if (/^(امسح|مسح|حذف|احذف|clear|delete)/i.test(normalized)) {
+      const field = getActiveField();
+      field.value = '';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      statusText.textContent = '🗑️ تم مسح ' + fieldNames[activeTarget];
+      return true;
+    }
+    // "أرسل" → submit form
     if (/^(أرسل|ارسل|إرسال|ابعث|send|submit)/i.test(normalized)) {
       stopListening();
       statusText.textContent = '📤 جاري إرسال الاستفسار...';
@@ -270,9 +406,16 @@
   // ──── Button handlers ────
   startBtn.addEventListener('click', startListening);
   stopBtn.addEventListener('click', stopListening);
+  clearBtn.addEventListener('click', () => {
+    const field = getActiveField();
+    field.value = '';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  // ──── Initialize default target ────
+  setTarget('question');
 
   // ──── Always-on command listener ────
-  // A lightweight listener that just waits for voice commands even when not in dictation mode
   let commandRecognition = null;
 
   function startCommandListener() {
@@ -288,7 +431,6 @@
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) {
           const text = e.results[i][0].transcript.trim();
-          // Only handle commands, not dictation
           if (!isListening) {
             checkVoiceCommand(text);
           }
@@ -297,14 +439,12 @@
     };
 
     commandRecognition.onend = () => {
-      // Restart if not in full dictation mode
       if (!isListening && commandRecognition) {
         try { commandRecognition.start(); } catch(e) {}
       }
     };
 
     commandRecognition.onerror = () => {
-      // Silently restart
       if (!isListening) {
         setTimeout(() => {
           if (commandRecognition) {
@@ -313,12 +453,8 @@
         }, 1000);
       }
     };
-
-    // Don't auto-start command listener - it requires user gesture
-    // Instead, start it on first interaction with the page
   }
 
-  // Start command listener on first click anywhere on the page
   let commandListenerStarted = false;
   document.addEventListener('click', function initCommandListener() {
     if (commandListenerStarted) return;
