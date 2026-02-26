@@ -16,7 +16,13 @@ urlpatterns = [
     path('inquiry/<int:pk>/status/', views.inquiry_update_status, name='inquiry_update_status'),
     path('inquiry/<int:pk>/close/', views.inquiry_close, name='inquiry_close'),
 
-    # Glossary
+    # Glossary categories
+    path('categories/', views.category_list, name='category_list'),
+    path('categories/new/', views.category_new, name='category_new'),
+    path('categories/<int:pk>/edit/', views.category_edit, name='category_edit'),
+    path('categories/<int:pk>/delete/', views.category_delete, name='category_delete'),
+
+    # Glossary terms
     path('glossary/', views.glossary_list, name='glossary_list'),
     path('glossary/new/', views.glossary_new, name='glossary_new'),
     path('glossary/<int:pk>/', views.glossary_detail, name='glossary_detail'),
@@ -24,13 +30,15 @@ urlpatterns = [
     path('glossary/<int:pk>/delete/', views.glossary_delete, name='glossary_delete'),
     path('glossary/<int:pk>/tts-played/', views.glossary_tts_played, name='glossary_tts_played'),
 
-    # TTS
+    # TTS (Text-to-Speech)
     path('tts/synthesize/', views.tts_synthesize, name='tts_synthesize'),
     path('tts/stream/', views.tts_stream, name='tts_stream'),
     path('tts/voices/', views.tts_voices, name='tts_voices'),
     path('inquiry/<int:pk>/tts/', views.tts_inquiry_answer, name='tts_inquiry_answer'),
     path('glossary/<int:pk>/tts/', views.tts_glossary_term, name='tts_glossary_term'),
-
-    # Alias so {% url 'service:glossary_tts' pk %} also resolves
     path('glossary/<int:pk>/tts-audio/', views.tts_glossary_term, name='glossary_tts'),
+
+    # STT (Speech-to-Text)
+    path('stt/transcribe/', views.stt_transcribe, name='stt_transcribe'),
+    path('stt/status/', views.stt_status, name='stt_status'),
 ]

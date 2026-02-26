@@ -5,7 +5,7 @@
 <div class="page-head">
   <nav class="breadcrumb" aria-label="التنقل">
     <a href="{% url 'service:dashboard' %}">لوحة التحكم</a>
-    <span class="separator">›</span>
+    <span class="separator">></span>
     <span>استفسار جديد</span>
   </nav>
   <h1>إرسال استفسار جديد</h1>
@@ -18,7 +18,7 @@
 
     {{ form.non_field_errors }}
 
-    <!-- ===== Title Field with inline mic ===== -->
+    <!-- Title Field with inline mic -->
     <div class="form-row" id="field-row-title">
       <div class="field-label-row">
         <label for="{{ form.title.id_for_label }}">عنوان الاستفسار *</label>
@@ -31,7 +31,7 @@
       <p class="field-hint">اكتب عنواناً مختصراً يصف سؤالك</p>
     </div>
 
-    <!-- ===== Question Text Field with inline mic ===== -->
+    <!-- Question Text Field with inline mic -->
     <div class="form-row" id="field-row-question">
       <div class="field-label-row">
         <label for="{{ form.question_text.id_for_label }}">نص السؤال</label>
@@ -44,10 +44,25 @@
       <p class="field-hint">اكتب سؤالك هنا، أو استخدم الإملاء الصوتي أدناه، أو ارفع ملف صوتي</p>
     </div>
 
-    <!-- ===== Voice Recognition (STT) Panel ===== -->
+    <!-- Voice Recognition (STT) Panel -->
     <div class="stt-panel card" id="stt-panel">
       <h3>🎤 الإملاء الصوتي</h3>
       <p class="hint">تحدث وسيتم تحويل كلامك إلى نص تلقائياً. اختر الحقل المستهدف ثم ابدأ التسجيل.</p>
+
+      <!-- STT Mode selector -->
+      <div class="tts-setting-group">
+        <span class="tts-setting-label">وضع التعرف:</span>
+        <div class="voice-selector" role="radiogroup" aria-label="وضع التعرف على الصوت">
+          <label class="voice-option selected" id="stt-mode-browser-label">
+            <input type="radio" name="stt-mode" value="browser" checked>
+            <span>🌐 المتصفح (مباشر)</span>
+          </label>
+          <label class="voice-option" id="stt-mode-backend-label">
+            <input type="radio" name="stt-mode" value="backend">
+            <span>🤖 الخادم (تسجيل وإرسال)</span>
+          </label>
+        </div>
+      </div>
 
       <!-- Target field selector -->
       <div class="tts-setting-group">
@@ -88,7 +103,7 @@
           ⏹ إيقاف
         </button>
         <button type="button" id="stt-clear" class="btn outline stt-btn" aria-label="مسح الحقل">
-          🗑️ مسح الحقل
+          🗑 مسح الحقل
         </button>
       </div>
 
@@ -106,7 +121,7 @@
 
       <!-- Voice commands hint -->
       <div class="stt-commands-hint">
-        <strong>الأوامر الصوتية:</strong><br>
+        <strong>الأوامر الصوتية (وضع المتصفح):</strong><br>
         <span class="stt-cmd">«عنوان»</span> للكتابة في العنوان &nbsp;
         <span class="stt-cmd">«سؤال»</span> للكتابة في نص السؤال &nbsp;
         <span class="stt-cmd">«سجّل»</span> لبدء التسجيل &nbsp;
@@ -116,6 +131,7 @@
       </div>
     </div>
 
+    <!-- Audio file upload with auto-transcribe -->
     <div class="form-row">
       <label for="{{ form.question_audio.id_for_label }}">ملف صوتي (اختياري)</label>
       <div class="file-upload-wrapper">
@@ -123,6 +139,14 @@
         <p class="field-hint">الملفات المدعومة: MP3, WAV, OGG, M4A, WebM (الحد الأقصى: 10 ميجابايت)</p>
       </div>
       {{ form.question_audio.errors }}
+
+      <!-- Auto-transcribe panel -->
+      <div id="auto-transcribe-panel" class="hidden" style="margin-top: 0.5rem;">
+        <button type="button" id="auto-transcribe-btn" class="btn secondary">
+          🎯 تفريغ الملف الصوتي تلقائياً
+        </button>
+        <span id="transcribe-status" class="hint" style="margin-right: 0.5rem;"></span>
+      </div>
     </div>
 
     <div class="form-row">
@@ -142,14 +166,13 @@
 {% block extra_js %}
 <script>
 (function() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    const panel = document.getElementById('stt-panel');
-    if (panel) {
-      panel.innerHTML = '<p class="hint">⚠️ المتصفح لا يدعم التعرف على الصوت. يرجى استخدام Chrome أو Edge.</p>';
+  // ──── CSRF helper ────
+  function getCSRF() {
+    for (let c of document.cookie.split(';')) {
+      c = c.trim();
+      if (c.startsWith('csrftoken=')) return decodeURIComponent(c.substring(10));
     }
-    document.querySelectorAll('.stt-inline-btn').forEach(b => b.style.display = 'none');
-    return;
+    return '';
   }
 
   // ──── DOM refs ────
@@ -158,12 +181,10 @@
   const clearBtn = document.getElementById('stt-clear');
   const statusDiv = document.getElementById('stt-status');
   const statusText = document.getElementById('stt-status-text');
-  const targetIndicator = document.getElementById('stt-target-indicator');
   const targetLabel = document.getElementById('stt-target-label');
   const submitBtn = document.getElementById('submit-btn');
   const form = document.getElementById('inquiry-form');
 
-  // Field references
   const fields = {
     title: document.getElementById('id_title'),
     question: document.getElementById('id_question_text')
@@ -177,16 +198,41 @@
     question: 'نص السؤال'
   };
 
-  let recognition = null;
-  let isListening = false;
-  let activeTarget = 'question'; // default target
+  let activeTarget = 'question';
+
+  // ──── Mode detection ────
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const hasBrowserSTT = !!SpeechRecognition;
+
+  // If no browser STT, force backend mode
+  if (!hasBrowserSTT) {
+    const browserOption = document.getElementById('stt-mode-browser-label');
+    if (browserOption) {
+      browserOption.style.opacity = '0.5';
+      browserOption.querySelector('input').disabled = true;
+    }
+    const backendRadio = document.querySelector('input[name="stt-mode"][value="backend"]');
+    if (backendRadio) {
+      backendRadio.checked = true;
+      backendRadio.closest('.voice-option')?.classList.add('selected');
+    }
+  }
+
+  function getSTTMode() {
+    const el = document.querySelector('input[name="stt-mode"]:checked');
+    return el ? el.value : (hasBrowserSTT ? 'browser' : 'backend');
+  }
+
+  function getLang() {
+    const el = document.querySelector('input[name="stt-lang"]:checked');
+    return el ? el.value : 'ar-SA';
+  }
 
   // ──── Target field management ────
   function setTarget(target) {
     if (!fields[target]) return;
     activeTarget = target;
 
-    // Update radio buttons
     document.querySelectorAll('input[name="stt-target"]').forEach(r => {
       r.closest('.stt-target-option')?.classList.remove('selected');
       if (r.value === target) {
@@ -195,63 +241,55 @@
       }
     });
 
-    // Update indicator
     targetLabel.innerHTML = 'الإملاء في: <strong>' + fieldNames[target] + '</strong>';
-
-    // Highlight active field row
     Object.values(fieldRows).forEach(row => row?.classList.remove('stt-active-field'));
     fieldRows[target]?.classList.add('stt-active-field');
-
-    // Focus the field
     fields[target]?.focus();
-
-    if (isListening) {
-      statusText.textContent = '🔴 جاري الاستماع — ' + fieldNames[target];
-    }
   }
 
   function getActiveField() {
     return fields[activeTarget] || fields.question;
   }
 
-  // ──── Target selector sync ────
+  // ──── Radio group sync ────
   document.querySelectorAll('input[name="stt-target"]').forEach(r => {
-    r.addEventListener('change', function() {
-      setTarget(this.value);
-    });
+    r.addEventListener('change', function() { setTarget(this.value); });
   });
 
-  // ──── Inline mic buttons ────
-  document.querySelectorAll('.stt-inline-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-      const target = this.dataset.sttTarget;
-      setTarget(target);
-      if (!isListening) {
-        startListening();
-      }
-    });
-  });
-
-  // ──── Language selector sync ────
   document.querySelectorAll('input[name="stt-lang"]').forEach(r => {
     r.addEventListener('change', function() {
       document.querySelectorAll('[name="stt-lang"]').forEach(radio => {
         radio.closest('.voice-option')?.classList.remove('selected');
       });
       this.closest('.voice-option')?.classList.add('selected');
-      if (recognition && isListening) {
-        stopListening();
-        setTimeout(startListening, 300);
-      }
     });
   });
 
-  function getLang() {
-    const el = document.querySelector('input[name="stt-lang"]:checked');
-    return el ? el.value : 'ar-SA';
-  }
+  document.querySelectorAll('input[name="stt-mode"]').forEach(r => {
+    r.addEventListener('change', function() {
+      document.querySelectorAll('[name="stt-mode"]').forEach(radio => {
+        radio.closest('.voice-option')?.classList.remove('selected');
+      });
+      this.closest('.voice-option')?.classList.add('selected');
+      // Stop any active recording when switching modes
+      stopListening();
+    });
+  });
 
-  // ──── Core STT ────
+  // ──── Inline mic buttons ────
+  document.querySelectorAll('.stt-inline-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      setTarget(this.dataset.sttTarget);
+      if (!isListening) startListening();
+    });
+  });
+
+  // ============================================
+  // Browser STT (Web Speech API)
+  // ============================================
+  let recognition = null;
+  let isListening = false;
+
   function createRecognition() {
     const rec = new SpeechRecognition();
     rec.lang = getLang();
@@ -261,7 +299,7 @@
     return rec;
   }
 
-  function startListening() {
+  function startBrowserSTT() {
     if (isListening) return;
 
     recognition = createRecognition();
@@ -273,11 +311,7 @@
       startBtn.classList.add('recording');
       statusDiv.classList.remove('hidden');
       statusText.textContent = '🔴 جاري الاستماع — ' + fieldNames[activeTarget];
-
-      // Highlight active field
       fieldRows[activeTarget]?.classList.add('stt-active-field');
-
-      // Highlight inline button
       document.querySelectorAll('.stt-inline-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.sttTarget === activeTarget);
       });
@@ -300,7 +334,6 @@
         const cmd = checkVoiceCommand(finalText.trim());
         if (cmd) return;
 
-        // Append to the active target field
         const field = getActiveField();
         const current = field.value;
         const sep = current && !current.endsWith(' ') && !current.endsWith('\n') ? ' ' : '';
@@ -316,11 +349,11 @@
     recognition.onerror = (e) => {
       console.error('STT Error:', e.error);
       if (e.error === 'no-speech') {
-        statusText.textContent = '⚠️ لم يتم رصد كلام. حاول مرة أخرى.';
+        statusText.textContent = '⚠ لم يتم رصد كلام. حاول مرة أخرى.';
       } else if (e.error === 'not-allowed') {
-        statusText.textContent = '⚠️ يرجى السماح بالوصول إلى الميكروفون.';
+        statusText.textContent = '⚠ يرجى السماح بالوصول إلى الميكروفون.';
       } else {
-        statusText.textContent = '⚠️ خطأ: ' + e.error;
+        statusText.textContent = '⚠ خطأ: ' + e.error;
       }
       setTimeout(() => { if (!isListening) statusDiv.classList.add('hidden'); }, 3000);
     };
@@ -336,63 +369,212 @@
     try {
       recognition.start();
     } catch(e) {
-      statusText.textContent = '⚠️ تعذر بدء التعرف على الصوت.';
+      statusText.textContent = '⚠ تعذر بدء التعرف على الصوت.';
       statusDiv.classList.remove('hidden');
     }
   }
 
+  // ============================================
+  // Backend STT (Record audio + send to server)
+  // ============================================
+  let backendRecorder = null;
+
+  async function startBackendSTT() {
+    if (isListening) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { sampleRate: 16000, channelCount: 1 }
+      });
+
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      let chunks = [];
+
+      processor.onaudioprocess = (e) => {
+        chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      };
+
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+
+      backendRecorder = { stream, audioContext, processor, source, chunks };
+
+      isListening = true;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      startBtn.classList.add('recording');
+      statusDiv.classList.remove('hidden');
+      statusText.textContent = '🔴 جاري التسجيل — ' + fieldNames[activeTarget] + ' (اضغط إيقاف لإرسال)';
+      fieldRows[activeTarget]?.classList.add('stt-active-field');
+
+    } catch (err) {
+      console.error('Microphone error:', err);
+      statusDiv.classList.remove('hidden');
+      statusText.textContent = '⚠ تعذر الوصول للميكروفون: ' + err.message;
+      setTimeout(() => statusDiv.classList.add('hidden'), 3000);
+    }
+  }
+
+  async function stopBackendSTT() {
+    if (!backendRecorder) return;
+
+    const { stream, audioContext, processor, source, chunks } = backendRecorder;
+
+    processor.disconnect();
+    source.disconnect();
+    stream.getTracks().forEach(t => t.stop());
+
+    // Merge float32 chunks
+    const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
+    const merged = new Float32Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    const sampleRate = audioContext.sampleRate;
+    audioContext.close();
+    backendRecorder = null;
+
+    // Encode as WAV
+    const wavBlob = encodeWAV(merged, sampleRate);
+
+    // Send to backend
+    statusText.textContent = '⏳ جاري التعرف على الصوت...';
+
+    try {
+      const formData = new FormData();
+      formData.append('audio', wavBlob, 'recording.wav');
+      formData.append('language', getLang());
+
+      const res = await fetch('/service/stt/transcribe/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCSRF() },
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (data.success && data.text) {
+        const field = getActiveField();
+        const current = field.value;
+        const sep = current && !current.endsWith(' ') && !current.endsWith('\n') ? ' ' : '';
+        field.value = current + sep + data.text;
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        statusText.textContent = '✅ تم التعرف على النص بنجاح';
+      } else {
+        statusText.textContent = '⚠ ' + (data.error || 'فشل التعرف على الصوت');
+      }
+    } catch (err) {
+      statusText.textContent = '⚠ خطأ في الاتصال بالخادم';
+      console.error('Backend STT error:', err);
+    }
+
+    setTimeout(() => statusDiv.classList.add('hidden'), 3000);
+  }
+
+  // WAV encoder
+  function encodeWAV(samples, sampleRate) {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+
+    function writeStr(offset, str) {
+      for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+    }
+
+    writeStr(0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeStr(8, 'WAVE');
+    writeStr(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeStr(36, 'data');
+    view.setUint32(40, samples.length * 2, true);
+
+    for (let i = 0; i < samples.length; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+
+    return new Blob([buffer], { type: 'audio/wav' });
+  }
+
+  // ============================================
+  // Unified start/stop
+  // ============================================
+  function startListening() {
+    const mode = getSTTMode();
+    if (mode === 'backend') {
+      startBackendSTT();
+    } else {
+      startBrowserSTT();
+    }
+  }
+
   function stopListening() {
+    const wasBrowserListening = recognition && isListening;
+    const wasBackendListening = backendRecorder && isListening;
+
     isListening = false;
+
     if (recognition) {
       try { recognition.stop(); } catch(e) {}
       recognition = null;
     }
+
+    if (wasBackendListening) {
+      stopBackendSTT();
+    }
+
     startBtn.disabled = false;
     stopBtn.disabled = true;
     startBtn.classList.remove('recording');
-    statusText.textContent = '⏹ تم إيقاف التسجيل';
-    setTimeout(() => statusDiv.classList.add('hidden'), 2000);
 
-    // Remove field highlights
+    if (wasBrowserListening) {
+      statusText.textContent = '⏹ تم إيقاف التسجيل';
+      setTimeout(() => statusDiv.classList.add('hidden'), 2000);
+    }
+
     Object.values(fieldRows).forEach(row => row?.classList.remove('stt-active-field'));
     document.querySelectorAll('.stt-inline-btn').forEach(b => b.classList.remove('active'));
   }
 
-  // ──── Voice commands ────
+  // ──── Voice commands (browser mode only) ────
   function checkVoiceCommand(text) {
     const normalized = text.replace(/[ًٌٍَُِّْ]/g, '').trim();
 
-    // "عنوان" → switch to title field
     if (/^(عنوان|العنوان|title)/i.test(normalized)) {
       setTarget('title');
       statusText.textContent = '🎯 تم التبديل إلى: العنوان';
       return true;
     }
-    // "سؤال" / "نص" → switch to question text field
     if (/^(سؤال|السؤال|نص|النص|question|text)/i.test(normalized)) {
       setTarget('question');
       statusText.textContent = '🎯 تم التبديل إلى: نص السؤال';
       return true;
     }
-    // "سجل" → start recording
     if (/^(سجل|سجّل|ابدأ التسجيل|ابدأ|record|start)/i.test(normalized)) {
       startListening();
       return true;
     }
-    // "توقف" → stop recording
     if (/^(توقف|توقّف|قف|وقف|stop)/i.test(normalized)) {
       stopListening();
       return true;
     }
-    // "امسح" → clear active field
     if (/^(امسح|مسح|حذف|احذف|clear|delete)/i.test(normalized)) {
       const field = getActiveField();
       field.value = '';
       field.dispatchEvent(new Event('input', { bubbles: true }));
-      statusText.textContent = '🗑️ تم مسح ' + fieldNames[activeTarget];
+      statusText.textContent = '🗑 تم مسح ' + fieldNames[activeTarget];
       return true;
     }
-    // "أرسل" → submit form
     if (/^(أرسل|ارسل|إرسال|ابعث|send|submit)/i.test(normalized)) {
       stopListening();
       statusText.textContent = '📤 جاري إرسال الاستفسار...';
@@ -415,55 +597,64 @@
   // ──── Initialize default target ────
   setTarget('question');
 
-  // ──── Always-on command listener ────
-  let commandRecognition = null;
+  // ============================================
+  // Auto-transcribe uploaded audio files
+  // ============================================
+  const audioInput = document.getElementById('id_question_audio');
+  const transcribePanel = document.getElementById('auto-transcribe-panel');
+  const transcribeBtn = document.getElementById('auto-transcribe-btn');
+  const transcribeStatus = document.getElementById('transcribe-status');
 
-  function startCommandListener() {
-    if (!SpeechRecognition) return;
-    if (commandRecognition) return;
+  if (audioInput && transcribePanel && transcribeBtn) {
+    audioInput.addEventListener('change', function() {
+      if (this.files.length > 0) {
+        transcribePanel.classList.remove('hidden');
+        transcribeStatus.textContent = '';
+      } else {
+        transcribePanel.classList.add('hidden');
+      }
+    });
 
-    commandRecognition = new SpeechRecognition();
-    commandRecognition.lang = 'ar-SA';
-    commandRecognition.continuous = true;
-    commandRecognition.interimResults = false;
+    transcribeBtn.addEventListener('click', async function() {
+      const file = audioInput.files[0];
+      if (!file) return;
 
-    commandRecognition.onresult = (e) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) {
-          const text = e.results[i][0].transcript.trim();
-          if (!isListening) {
-            checkVoiceCommand(text);
+      this.disabled = true;
+      this.textContent = '⏳ جاري التفريغ...';
+      transcribeStatus.textContent = '';
+
+      const formData = new FormData();
+      formData.append('audio', file);
+      formData.append('language', getLang());
+
+      try {
+        const res = await fetch('/service/stt/transcribe/', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': getCSRF() },
+          body: formData,
+        });
+        const data = await res.json();
+
+        if (data.success && data.text) {
+          fields.question.value = data.text;
+          fields.question.dispatchEvent(new Event('input', { bubbles: true }));
+
+          if (!fields.title.value.trim()) {
+            fields.title.value = data.text.substring(0, 100);
           }
+
+          transcribeStatus.textContent = '✅ تم التفريغ بنجاح';
+        } else {
+          transcribeStatus.textContent = '⚠ ' + (data.error || 'فشل التفريغ. استخدم الإملاء الصوتي بدلاً.');
         }
+      } catch (err) {
+        transcribeStatus.textContent = '⚠ خطأ في الاتصال. استخدم الإملاء الصوتي بدلاً.';
+      } finally {
+        this.disabled = false;
+        this.textContent = '🎯 تفريغ الملف الصوتي تلقائياً';
       }
-    };
-
-    commandRecognition.onend = () => {
-      if (!isListening && commandRecognition) {
-        try { commandRecognition.start(); } catch(e) {}
-      }
-    };
-
-    commandRecognition.onerror = () => {
-      if (!isListening) {
-        setTimeout(() => {
-          if (commandRecognition) {
-            try { commandRecognition.start(); } catch(e) {}
-          }
-        }, 1000);
-      }
-    };
+    });
   }
-
-  let commandListenerStarted = false;
-  document.addEventListener('click', function initCommandListener() {
-    if (commandListenerStarted) return;
-    commandListenerStarted = true;
-    startCommandListener();
-    if (commandRecognition && !isListening) {
-      try { commandRecognition.start(); } catch(e) {}
-    }
-  }, { once: false });
 })();
 </script>
 {% endblock %}

@@ -9,7 +9,18 @@
 <div class="card">
   <form method="get" class="search-row">
     <input class="input" name="q" value="{{ q }}" placeholder="ابحث عن مصطلح...">
+    <select class="input select" name="category" aria-label="تصفية حسب التصنيف">
+      <option value="">جميع التصنيفات</option>
+      {% for cat in categories %}
+        <option value="{{ cat.pk }}" {% if selected_category == cat.pk|stringformat:"d" %}selected{% endif %}>
+          {% if cat.icon %}{{ cat.icon }} {% endif %}{{ cat.name }} ({{ cat.num_terms }})
+        </option>
+      {% endfor %}
+    </select>
     <button class="btn secondary" type="submit">بحث</button>
+    {% if q or selected_category %}
+      <a class="btn outline" href="{% url 'glossary:list' %}">إلغاء</a>
+    {% endif %}
     {% if user.is_authenticated and user.is_librarian %}
       <a class="btn primary" href="{% url 'glossary:new' %}">إضافة مصطلح</a>
     {% endif %}
@@ -20,7 +31,13 @@
       {% for t in terms %}
         <a class="list-card" href="{% url 'glossary:detail' t.pk %}">
           <div class="list-title">{{ t.term }}</div>
-          <div class="list-meta">اضغط لعرض التعريف وتشغيل النطق 🔊</div>
+          <div class="list-preview">{{ t.definition|truncatewords:15 }}</div>
+          <div class="list-meta">
+            {% if t.category %}
+              <span class="term-badge">{% if t.category.icon %}{{ t.category.icon }} {% endif %}{{ t.category.name }}</span>
+            {% endif %}
+            <span>اضغط لعرض التعريف وتشغيل النطق 🔊</span>
+          </div>
         </a>
       {% endfor %}
     </div>

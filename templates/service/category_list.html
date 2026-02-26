@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}تصنيفات القاموس | منصة طيبة الصوتية{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <nav class="breadcrumb" aria-label="التنقل">
+    <a href="{% url 'service:glossary_list' %}">قاموس المصطلحات</a>
+    <span class="separator">></span>
+    <span>التصنيفات</span>
+  </nav>
+  <h1>تصنيفات القاموس</h1>
+  <p class="muted">إدارة تصنيفات مصطلحات القاموس.</p>
+</div>
+
+<div class="card">
+  {% if user.is_authenticated and user.is_librarian %}
+  <div class="actions-bar">
+    <a class="btn primary" href="{% url 'service:category_new' %}">+ إضافة تصنيف جديد</a>
+    <a class="btn outline" href="{% url 'service:glossary_list' %}">العودة للقاموس</a>
+  </div>
+  {% endif %}
+
+  {% if categories %}
+    <div class="list-cards">
+      {% for cat in categories %}
+        <div class="list-card category-card">
+          <div class="list-title">
+            {% if cat.icon %}{{ cat.icon }} {% endif %}{{ cat.name }}
+          </div>
+          {% if cat.description %}
+            <div class="list-preview">{{ cat.description|truncatewords:20 }}</div>
+          {% endif %}
+          <div class="list-meta">
+            <span>{{ cat.num_terms }} مصطلح</span>
+            <span>الترتيب: {{ cat.order }}</span>
+          </div>
+          {% if user.is_authenticated and user.is_librarian %}
+          <div class="card-actions">
+            <a class="btn secondary small" href="{% url 'service:category_edit' cat.pk %}">تعديل</a>
+            <form method="post" action="{% url 'service:category_delete' cat.pk %}"
+                  class="inline-form"
+                  onsubmit="return confirm('هل أنت متأكد من حذف التصنيف &laquo;{{ cat.name }}&raquo;؟ سيتم إزالة التصنيف من المصطلحات المرتبطة.')">
+              {% csrf_token %}
+              <button class="btn danger-outline small" type="submit">حذف</button>
+            </form>
+          </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <p class="muted">لا توجد تصنيفات بعد.</p>
+      {% if user.is_authenticated and user.is_librarian %}
+        <a class="btn primary" href="{% url 'service:category_new' %}">أضف أول تصنيف</a>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

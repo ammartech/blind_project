@@ -35,7 +35,13 @@
       {{ form.pronunciation_hint }}
       {{ form.pronunciation_hint.errors }}
     </div>
-    
+
+    <div class="form-row">
+      <label for="{{ form.category.id_for_label }}">التصنيف</label>
+      {{ form.category }}
+      {{ form.category.errors }}
+    </div>
+
     <div class="form-actions">
       <button class="btn primary" type="submit">حفظ التعديلات</button>
       <a class="btn outline" href="{% url 'service:glossary_detail' term.pk %}">إلغاء</a>

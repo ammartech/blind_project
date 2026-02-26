@@ -1,25 +1,40 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .forms import TermForm
-from service.models import GlossaryTerm as Term
+from service.models import GlossaryCategory, GlossaryTerm as Term
 
 
 @ensure_csrf_cookie
 def term_list(request):
     q = (request.GET.get('q') or '').strip()
-    terms = Term.objects.all().order_by('term')
+    cat_id = request.GET.get('category', '').strip()
+
+    terms = Term.objects.select_related('category').all().order_by('term')
     if q:
         terms = terms.filter(term__icontains=q)
-    return render(request, 'glossary/list.html', {'terms': terms, 'q': q})
+    if cat_id:
+        terms = terms.filter(category_id=cat_id)
+
+    categories = GlossaryCategory.objects.annotate(
+        num_terms=Count('terms')
+    ).order_by('order', 'name')
+
+    return render(request, 'glossary/list.html', {
+        'terms': terms,
+        'q': q,
+        'categories': categories,
+        'selected_category': cat_id,
+    })
 
 
 @ensure_csrf_cookie
 def term_detail(request, pk: int):
-    term = get_object_or_404(Term, pk=pk)
+    term = get_object_or_404(Term.objects.select_related('category'), pk=pk)
     term.increment_view()
     return render(request, 'glossary/detail.html', {'term': term})
 
