@@ -36,7 +36,13 @@
       {{ form.pronunciation_hint.errors }}
       <p class="field-hint">مثال: كلمة "Database" تُنطق "داتا-بيس"</p>
     </div>
-    
+
+    <div class="form-row">
+      <label for="{{ form.category.id_for_label }}">التصنيف</label>
+      {{ form.category }}
+      {{ form.category.errors }}
+    </div>
+
     <div class="form-actions">
       <button class="btn primary" type="submit">حفظ المصطلح</button>
       <a class="btn outline" href="{% url 'service:glossary_list' %}">إلغاء</a>

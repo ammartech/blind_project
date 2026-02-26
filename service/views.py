@@ -1,40 +1,40 @@
+import json
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q, Count
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from .forms import (
     AnswerForm,
+    GlossaryCategoryForm,
+    GlossaryTermForm,
     InquiryCreateForm,
     InquiryFilterForm,
     TranscribeForm,
-    GlossaryTermForm,
 )
-from .models import Inquiry, GlossaryTerm
+from .models import GlossaryCategory, GlossaryTerm, Inquiry
+from .tts_service import get_tts_service, get_audio_url
 
-# service/views.py
 
 # ============================================
-# دوال مساعدة
+# Helper functions
 # ============================================
 
 def _is_librarian(user) -> bool:
-    """التحقق من أن المستخدم أخصائي مكتبة"""
     return getattr(user, 'is_librarian', lambda: False)()
 
 
 def _is_blind(user) -> bool:
-    """التحقق من أن المستخدم كفيف"""
     return getattr(user, 'is_blind', lambda: False)()
 
 
 def _get_user_stats(user):
-    """إحصائيات المستخدم"""
     if _is_librarian(user):
         return {
             'total': Inquiry.objects.count(),
@@ -55,22 +55,19 @@ def _get_user_stats(user):
 
 
 # ============================================
-# عروض الاستفسارات
+# Inquiry views
 # ============================================
 
 @login_required
 def dashboard(request):
-    """لوحة التحكم الرئيسية"""
     user = request.user
     filter_form = InquiryFilterForm(request.GET)
 
-    # تحديد الاستفسارات حسب نوع المستخدم
     if _is_librarian(user):
         inquiries = Inquiry.objects.select_related('created_by', 'answered_by').all()
     else:
         inquiries = Inquiry.objects.filter(created_by=user)
 
-    # تطبيق الفلاتر
     if filter_form.is_valid():
         status = filter_form.cleaned_data.get('status')
         priority = filter_form.cleaned_data.get('priority')
@@ -87,16 +84,12 @@ def dashboard(request):
                 Q(transcription_text__icontains=search)
             )
 
-    # ترتيب حسب الأولوية والتاريخ
-    priority_order = {'urgent': 0, 'high': 1, 'normal': 2, 'low': 3}
     inquiries = inquiries.order_by('-created_at')
 
-    # الصفحات
     paginator = Paginator(inquiries, 10)
     page = request.GET.get('page', 1)
     inquiries_page = paginator.get_page(page)
 
-    # الإحصائيات
     stats = _get_user_stats(user)
 
     context = {
@@ -110,7 +103,6 @@ def dashboard(request):
 
 @login_required
 def inquiry_new(request):
-    """إنشاء استفسار جديد"""
     if not _is_blind(request.user) and not _is_librarian(request.user):
         messages.error(request, 'ليس لديك صلاحية لإنشاء استفسار.')
         return HttpResponseForbidden()
@@ -121,13 +113,12 @@ def inquiry_new(request):
             inquiry = form.save(commit=False)
             inquiry.created_by = request.user
 
-            # إذا كان النص موجوداً، اعتبره مفرغاً
             if inquiry.question_text.strip():
                 inquiry.status = Inquiry.Status.TRANSCRIBED
                 inquiry.transcription_text = inquiry.question_text.strip()
 
             inquiry.save()
-            messages.success(request, 'تم إرسال استفسارك بنجاح ✅')
+            messages.success(request, 'تم إرسال استفسارك بنجاح')
             return redirect('service:inquiry_detail', pk=inquiry.pk)
     else:
         form = InquiryCreateForm()
@@ -137,19 +128,16 @@ def inquiry_new(request):
 
 @login_required
 def inquiry_detail(request, pk: int):
-    """عرض تفاصيل الاستفسار"""
     inquiry = get_object_or_404(
         Inquiry.objects.select_related('created_by', 'answered_by'),
         pk=pk
     )
 
-    # التحقق من الصلاحيات
     is_librarian = _is_librarian(request.user)
     if not is_librarian and inquiry.created_by != request.user:
         messages.error(request, 'ليس لديك صلاحية لعرض هذا الاستفسار.')
         return HttpResponseForbidden()
 
-    # تحديث حالة القراءة
     if is_librarian and not inquiry.is_read_by_librarian:
         inquiry.is_read_by_librarian = True
         inquiry.save(update_fields=['is_read_by_librarian'])
@@ -166,7 +154,6 @@ def inquiry_detail(request, pk: int):
 
 @login_required
 def inquiry_transcribe(request, pk: int):
-    """تفريغ السؤال الصوتي"""
     inquiry = get_object_or_404(Inquiry, pk=pk)
 
     if not _is_librarian(request.user):
@@ -179,7 +166,7 @@ def inquiry_transcribe(request, pk: int):
             obj = form.save(commit=False)
             obj.status = Inquiry.Status.TRANSCRIBED
             obj.save()
-            messages.success(request, 'تم حفظ التفريغ بنجاح ✅')
+            messages.success(request, 'تم حفظ التفريغ بنجاح')
             return redirect('service:inquiry_detail', pk=pk)
     else:
         form = TranscribeForm(instance=inquiry)
@@ -193,14 +180,12 @@ def inquiry_transcribe(request, pk: int):
 
 @login_required
 def inquiry_answer(request, pk: int):
-    """الإجابة على الاستفسار"""
     inquiry = get_object_or_404(Inquiry, pk=pk)
 
     if not _is_librarian(request.user):
         messages.error(request, 'فقط أخصائيي المكتبة يمكنهم الإجابة.')
         return HttpResponseForbidden()
 
-    # التحقق من التفريغ
     if inquiry.status == Inquiry.Status.NEW and not inquiry.transcription_text.strip():
         messages.warning(request, 'يرجى تفريغ السؤال الصوتي أولاً.')
         return redirect('service:inquiry_transcribe', pk=pk)
@@ -212,9 +197,9 @@ def inquiry_answer(request, pk: int):
             obj.answered_by = request.user
             obj.answered_at = timezone.now()
             obj.status = Inquiry.Status.ANSWERED
-            obj.is_read_by_user = False  # إعادة تعيين للإشعار
+            obj.is_read_by_user = False
             obj.save()
-            messages.success(request, 'تم إرسال الإجابة بنجاح ✅')
+            messages.success(request, 'تم إرسال الإجابة بنجاح')
             return redirect('service:inquiry_detail', pk=pk)
     else:
         form = AnswerForm(instance=inquiry)
@@ -229,7 +214,6 @@ def inquiry_answer(request, pk: int):
 @login_required
 @require_POST
 def inquiry_update_status(request, pk: int):
-    """تحديث حالة الاستفسار (AJAX)"""
     inquiry = get_object_or_404(Inquiry, pk=pk)
 
     if not _is_librarian(request.user):
@@ -250,7 +234,6 @@ def inquiry_update_status(request, pk: int):
 
 @login_required
 def inquiry_close(request, pk: int):
-    """إغلاق الاستفسار"""
     inquiry = get_object_or_404(Inquiry, pk=pk)
 
     if not _is_librarian(request.user) and inquiry.created_by != request.user:
@@ -266,45 +249,47 @@ def inquiry_close(request, pk: int):
 
 
 # ============================================
-# عروض قاموس المصطلحات
+# Glossary term views
 # ============================================
 
 def glossary_list(request):
-    """عرض قائمة المصطلحات"""
     q = request.GET.get('q', '').strip()
+    cat_id = request.GET.get('category', '').strip()
 
-    terms = GlossaryTerm.objects.all()
+    terms = GlossaryTerm.objects.select_related('category').all()
     if q:
         terms = terms.filter(
             Q(term__icontains=q) | Q(definition__icontains=q)
         )
+    if cat_id:
+        terms = terms.filter(category_id=cat_id)
 
-    # الصفحات
     paginator = Paginator(terms, 20)
     page = request.GET.get('page', 1)
     terms_page = paginator.get_page(page)
 
+    categories = GlossaryCategory.objects.annotate(
+        num_terms=Count('terms')
+    ).order_by('order', 'name')
+
     context = {
         'terms': terms_page,
         'q': q,
+        'categories': categories,
+        'selected_category': cat_id,
     }
     return render(request, 'service/glossary_list.html', context)
 
 
 @ensure_csrf_cookie
 def glossary_detail(request, pk: int):
-    """عرض تفاصيل المصطلح"""
-    term = get_object_or_404(GlossaryTerm, pk=pk)
-
-    # زيادة عدد المشاهدات
+    term = get_object_or_404(GlossaryTerm.objects.select_related('category'), pk=pk)
     term.increment_view()
-
     return render(request, 'service/glossary_detail.html', {'term': term})
 
 
 @login_required
 def glossary_new(request):
-    """إضافة مصطلح جديد"""
     if not _is_librarian(request.user):
         messages.error(request, 'فقط أخصائيي المكتبة يمكنهم إضافة المصطلحات.')
         return HttpResponseForbidden()
@@ -315,7 +300,7 @@ def glossary_new(request):
             term = form.save(commit=False)
             term.created_by = request.user
             term.save()
-            messages.success(request, 'تم إضافة المصطلح بنجاح ✅')
+            messages.success(request, 'تم إضافة المصطلح بنجاح')
             return redirect('service:glossary_detail', pk=term.pk)
     else:
         form = GlossaryTermForm()
@@ -325,7 +310,6 @@ def glossary_new(request):
 
 @login_required
 def glossary_edit(request, pk: int):
-    """تعديل مصطلح"""
     term = get_object_or_404(GlossaryTerm, pk=pk)
 
     if not _is_librarian(request.user):
@@ -336,7 +320,7 @@ def glossary_edit(request, pk: int):
         form = GlossaryTermForm(request.POST, instance=term)
         if form.is_valid():
             form.save()
-            messages.success(request, 'تم تحديث المصطلح بنجاح ✅')
+            messages.success(request, 'تم تحديث المصطلح بنجاح')
             return redirect('service:glossary_detail', pk=term.pk)
     else:
         form = GlossaryTermForm(instance=term)
@@ -347,7 +331,6 @@ def glossary_edit(request, pk: int):
 @login_required
 @require_POST
 def glossary_delete(request, pk: int):
-    """حذف مصطلح"""
     term = get_object_or_404(GlossaryTerm, pk=pk)
 
     if not _is_librarian(request.user):
@@ -361,7 +344,6 @@ def glossary_delete(request, pk: int):
 
 @require_POST
 def glossary_tts_played(request, pk: int):
-    """تسجيل تشغيل القراءة الصوتية (AJAX)"""
     term = get_object_or_404(GlossaryTerm, pk=pk)
     term.tts_play_count += 1
     term.save(update_fields=['tts_play_count'])
@@ -369,32 +351,82 @@ def glossary_tts_played(request, pk: int):
 
 
 # ============================================
-# عروض تحويل النص إلى كلام (TTS)
-# Text-to-Speech Views using XTTS-v2
+# Glossary category CRUD views
 # ============================================
 
-import json
-from django.http import HttpResponse
-from django.views.decorators.http import require_GET
-from .tts_service import get_tts_service, get_audio_url
+def category_list(request):
+    categories = GlossaryCategory.objects.annotate(
+        num_terms=Count('terms')
+    ).order_by('order', 'name')
+    return render(request, 'service/category_list.html', {'categories': categories})
 
+
+@login_required
+def category_new(request):
+    if not _is_librarian(request.user):
+        messages.error(request, 'فقط أخصائيي المكتبة يمكنهم إضافة التصنيفات.')
+        return HttpResponseForbidden()
+
+    if request.method == 'POST':
+        form = GlossaryCategoryForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'تم إضافة التصنيف بنجاح')
+            return redirect('service:category_list')
+    else:
+        form = GlossaryCategoryForm()
+
+    return render(request, 'service/category_form.html', {
+        'form': form,
+        'title': 'إضافة تصنيف جديد',
+    })
+
+
+@login_required
+def category_edit(request, pk: int):
+    category = get_object_or_404(GlossaryCategory, pk=pk)
+
+    if not _is_librarian(request.user):
+        messages.error(request, 'فقط أخصائيي المكتبة يمكنهم تعديل التصنيفات.')
+        return HttpResponseForbidden()
+
+    if request.method == 'POST':
+        form = GlossaryCategoryForm(request.POST, instance=category)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'تم تحديث التصنيف بنجاح')
+            return redirect('service:category_list')
+    else:
+        form = GlossaryCategoryForm(instance=category)
+
+    return render(request, 'service/category_form.html', {
+        'form': form,
+        'category': category,
+        'title': f'تعديل التصنيف: {category.name}',
+    })
+
+
+@login_required
+@require_POST
+def category_delete(request, pk: int):
+    category = get_object_or_404(GlossaryCategory, pk=pk)
+
+    if not _is_librarian(request.user):
+        return JsonResponse({'error': 'غير مصرح'}, status=403)
+
+    cat_name = category.name
+    category.delete()
+    messages.success(request, f'تم حذف التصنيف "{cat_name}".')
+    return redirect('service:category_list')
+
+
+# ============================================
+# TTS views (Text-to-Speech)
+# ============================================
 
 @require_POST
 def tts_synthesize(request):
-    """
-    API لتحويل النص العربي إلى كلام
-
-    POST /service/tts/synthesize/
-    Content-Type: application/json
-
-    Request:
-        {"text": "مرحباً بكم", "voice": "female"}
-
-    Response:
-        {"success": true, "audio_url": "/media/tts_audio/tts_female_xxx.wav"}
-    """
     try:
-        # Parse request
         try:
             data = json.loads(request.body)
         except json.JSONDecodeError:
@@ -407,7 +439,6 @@ def tts_synthesize(request):
         voice = data.get('voice', 'female')
         speed = data.get('speed', 'normal')
 
-        # Validation
         if not text:
             return JsonResponse({
                 'success': False,
@@ -416,17 +447,14 @@ def tts_synthesize(request):
 
         if voice not in ['male', 'female']:
             voice = 'female'
-
         if speed not in ['slow', 'normal', 'fast']:
             speed = 'normal'
-
         if len(text) > 2000:
             return JsonResponse({
                 'success': False,
                 'error': 'النص طويل جداً (الحد الأقصى 2000 حرف)'
             }, status=400)
 
-        # Generate speech
         tts = get_tts_service()
         audio_path = tts.synthesize(text, voice, speed)
         audio_url = get_audio_url(audio_path)
@@ -447,41 +475,26 @@ def tts_synthesize(request):
 
 @require_GET
 def tts_stream(request):
-    """
-    تدفق الصوت مباشرة
-
-    GET /service/tts/stream/?text=مرحباً&voice=female
-
-    Returns: audio/wav
-    """
     text = request.GET.get('text', '').strip()
     voice = request.GET.get('voice', 'female')
 
     if not text:
         return JsonResponse({'error': 'النص مطلوب'}, status=400)
-
     if len(text) > 500:
         return JsonResponse({'error': 'النص طويل جداً للتدفق المباشر'}, status=400)
 
     try:
         tts = get_tts_service()
         audio_bytes = tts.synthesize_to_bytes(text, voice)
-
         response = HttpResponse(audio_bytes, content_type='audio/wav')
         response['Content-Disposition'] = 'inline; filename="speech.wav"'
         return response
-
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
 
 @require_GET
 def tts_voices(request):
-    """
-    الحصول على قائمة الأصوات المتاحة
-
-    GET /service/tts/voices/
-    """
     tts = get_tts_service()
     voices = tts.get_available_voices()
     engine = tts.get_engine_info()
@@ -491,58 +504,29 @@ def tts_voices(request):
 @login_required
 @require_POST
 def tts_inquiry_answer(request, pk: int):
-    """
-    تحويل إجابة الاستفسار إلى كلام
-
-    POST /service/inquiry/<pk>/tts/
-    """
     inquiry = get_object_or_404(Inquiry, pk=pk)
     voice = request.POST.get('voice', 'female')
 
-    # التحقق من الصلاحيات
     is_librarian = _is_librarian(request.user)
     if not is_librarian and inquiry.created_by != request.user:
-        return JsonResponse({
-            'success': False,
-            'error': 'غير مصرح'
-        }, status=403)
+        return JsonResponse({'success': False, 'error': 'غير مصرح'}, status=403)
 
     if not inquiry.answer_text:
-        return JsonResponse({
-            'success': False,
-            'error': 'لا توجد إجابة لقراءتها'
-        }, status=400)
+        return JsonResponse({'success': False, 'error': 'لا توجد إجابة لقراءتها'}, status=400)
 
     try:
         tts = get_tts_service()
         audio_path = tts.synthesize(inquiry.answer_text, voice)
         audio_url = get_audio_url(audio_path)
-
-        return JsonResponse({
-            'success': True,
-            'audio_url': audio_url
-        })
+        return JsonResponse({'success': True, 'audio_url': audio_url})
     except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        }, status=500)
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 @require_POST
 def tts_glossary_term(request, pk: int):
-    """
-    تحويل مصطلح من القاموس إلى كلام
-
-    POST /service/glossary/<pk>/tts/
-
-    Parameters:
-        type: 'term' | 'definition' | 'full'
-        voice: 'male' | 'female'
-    """
     term = get_object_or_404(GlossaryTerm, pk=pk)
 
-    # Accept both JSON body and form data
     try:
         data = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
@@ -550,12 +534,11 @@ def tts_glossary_term(request, pk: int):
     voice = data.get('voice') or request.POST.get('voice', 'female')
     content_type = data.get('mode') or data.get('type') or request.POST.get('type', 'full')
 
-    # Build text based on type
     if content_type == 'term':
         text = term.term
     elif content_type == 'definition':
         text = term.definition
-    else:  # full
+    else:
         text = f"{term.term}. {term.definition}"
 
     try:
@@ -563,7 +546,6 @@ def tts_glossary_term(request, pk: int):
         audio_path = tts.synthesize(text, voice)
         audio_url = get_audio_url(audio_path)
 
-        # Update TTS play count
         term.tts_play_count = (term.tts_play_count or 0) + 1
         term.save(update_fields=['tts_play_count'])
 
@@ -573,7 +555,52 @@ def tts_glossary_term(request, pk: int):
             'play_count': term.tts_play_count
         })
     except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# ============================================
+# STT views (Speech-to-Text)
+# ============================================
+
+@require_POST
+def stt_transcribe(request):
+    """
+    Backend Speech-to-Text endpoint.
+
+    POST /service/stt/transcribe/
+    Content-Type: multipart/form-data
+
+    Parameters:
+        audio: Audio file (WAV format preferred)
+        language: Language code (ar-SA, en-US). Default: ar-SA
+    """
+    from .stt_service import get_stt_service
+
+    audio_file = request.FILES.get('audio')
+    if not audio_file:
         return JsonResponse({
             'success': False,
-            'error': str(e)
-        }, status=500)
+            'error': 'الملف الصوتي مطلوب'
+        }, status=400)
+
+    language = request.POST.get('language', 'ar-SA')
+
+    stt = get_stt_service()
+    if not stt.is_available:
+        return JsonResponse({
+            'success': False,
+            'error': 'خدمة التعرف على الصوت غير متاحة حالياً. استخدم الإملاء الصوتي عبر المتصفح.'
+        }, status=503)
+
+    result = stt.transcribe_audio_file(audio_file, language)
+    status_code = 200 if result['success'] else 422
+    return JsonResponse(result, status=status_code)
+
+
+@require_GET
+def stt_status(request):
+    """Check STT service availability."""
+    from .stt_service import get_stt_service
+
+    stt = get_stt_service()
+    return JsonResponse(stt.get_status())

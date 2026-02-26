@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import GlossaryTerm, Inquiry
+from .models import GlossaryCategory, GlossaryTerm, Inquiry
+
+
+@admin.register(GlossaryCategory)
+class GlossaryCategoryAdmin(admin.ModelAdmin):
+    list_display = ('name', 'icon', 'term_count', 'order', 'created_at')
+    list_editable = ('order',)
+    search_fields = ('name', 'description')
+    ordering = ('order', 'name')
 
 
 @admin.register(Inquiry)

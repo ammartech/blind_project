@@ -23,8 +23,7 @@ class TermForm(forms.ModelForm):
                 'class': 'input',
                 'placeholder': 'تلميح النطق (اختياري)',
             }),
-            'category': forms.TextInput(attrs={
-                'class': 'input',
-                'placeholder': 'التصنيف (اختياري)',
+            'category': forms.Select(attrs={
+                'class': 'input select',
             }),
         }

@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }} | منصة طيبة الصوتية{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <nav class="breadcrumb" aria-label="التنقل">
+    <a href="{% url 'service:glossary_list' %}">قاموس المصطلحات</a>
+    <span class="separator">></span>
+    <a href="{% url 'service:category_list' %}">التصنيفات</a>
+    <span class="separator">></span>
+    <span>{{ title }}</span>
+  </nav>
+  <h1>{{ title }}</h1>
+</div>
+
+<div class="card">
+  <form method="post" class="form">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <div class="form-row">
+      <label for="{{ form.name.id_for_label }}">اسم التصنيف *</label>
+      {{ form.name }}
+      {{ form.name.errors }}
+    </div>
+
+    <div class="form-row">
+      <label for="{{ form.description.id_for_label }}">وصف التصنيف</label>
+      {{ form.description }}
+      {{ form.description.errors }}
+    </div>
+
+    <div class="form-row">
+      <label for="{{ form.icon.id_for_label }}">أيقونة</label>
+      {{ form.icon }}
+      {{ form.icon.errors }}
+      <p class="field-hint">أدخل رمز تعبيري مثل: 📚 🔬 💻 📖 🔍</p>
+    </div>
+
+    <div class="form-row">
+      <label for="{{ form.order.id_for_label }}">الترتيب</label>
+      {{ form.order }}
+      {{ form.order.errors }}
+      <p class="field-hint">رقم أصغر = يظهر أولاً</p>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn primary" type="submit">حفظ</button>
+      <a class="btn outline" href="{% url 'service:category_list' %}">إلغاء</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -2,10 +2,11 @@
 {% block title %}{{ term.term }} | قاموس المصطلحات{% endblock %}
 
 {% block content %}
+
 <div class="page-head">
   <nav class="breadcrumb" aria-label="التنقل">
     <a href="{% url 'glossary:list' %}">قاموس المصطلحات</a>
-    <span class="separator">›</span>
+    <span class="separator">></span>
     <span>{{ term.term }}</span>
   </nav>
 
@@ -19,7 +20,7 @@
   {% endif %}
 
   {% if term.category %}
-    <span class="term-badge">{{ term.category }}</span>
+    <span class="term-badge">{% if term.category.icon %}{{ term.category.icon }} {% endif %}{{ term.category.name }}</span>
   {% endif %}
 </div>
 
@@ -76,7 +77,7 @@
         </label>
         <label class="speed-option selected">
           <input type="radio" name="tts-speed" value="normal" checked>
-          <span>▶️ عادي</span>
+          <span>▶ عادي</span>
         </label>
         <label class="speed-option">
           <input type="radio" name="tts-speed" value="fast">
@@ -119,7 +120,7 @@
 <!-- Stats Card -->
 <div class="card stats-card">
   <div class="term-stats">
-    <span>👁️ المشاهدات: <strong>{{ term.view_count }}</strong></span>
+    <span>👁 المشاهدات: <strong>{{ term.view_count }}</strong></span>
     <span>🔊 مرات التشغيل: <strong id="tts-play-count">{{ term.tts_play_count }}</strong></span>
     <span>📅 أضيف: <strong>{{ term.created_at|date:"Y/m/d" }}</strong></span>
   </div>
@@ -129,7 +130,7 @@
 <div class="back-link">
   <a class="btn outline" href="{% url 'glossary:list' %}">← العودة لقاموس المصطلحات</a>
   {% if user.is_authenticated and user.is_librarian %}
-    <a class="btn secondary" href="{% url 'service:glossary_edit' term.pk %}">✏️ تعديل</a>
+    <a class="btn secondary" href="{% url 'service:glossary_edit' term.pk %}">تعديل</a>
   {% endif %}
 </div>
 

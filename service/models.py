@@ -2,6 +2,27 @@ from django.conf import settings
 from django.db import models
 
 
+class GlossaryCategory(models.Model):
+    """تصنيف مصطلحات القاموس"""
+    name = models.CharField(max_length=100, unique=True, verbose_name='اسم التصنيف')
+    description = models.TextField(blank=True, default='', verbose_name='وصف التصنيف')
+    icon = models.CharField(max_length=10, blank=True, default='', verbose_name='أيقونة')
+    order = models.PositiveIntegerField(default=0, verbose_name='الترتيب')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإنشاء')
+
+    class Meta:
+        verbose_name = 'تصنيف'
+        verbose_name_plural = 'التصنيفات'
+        ordering = ['order', 'name']
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def term_count(self):
+        return self.terms.count()
+
+
 class Inquiry(models.Model):
     class Status(models.TextChoices):
         NEW = 'new', 'جديد'
@@ -74,8 +95,13 @@ class GlossaryTerm(models.Model):
     pronunciation_hint = models.CharField(
         max_length=300, blank=True, default='', verbose_name='تلميح النطق'
     )
-    category = models.CharField(
-        max_length=100, blank=True, default='', verbose_name='التصنيف'
+    category = models.ForeignKey(
+        GlossaryCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='terms',
+        verbose_name='التصنيف',
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإضافة')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='آخر تحديث')

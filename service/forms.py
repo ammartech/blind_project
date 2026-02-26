@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import GlossaryTerm, Inquiry
+from .models import GlossaryCategory, GlossaryTerm, Inquiry
 
 
 class InquiryCreateForm(forms.ModelForm):
@@ -100,8 +100,32 @@ class GlossaryTermForm(forms.ModelForm):
                 'class': 'input',
                 'placeholder': 'تلميح النطق (اختياري)',
             }),
-            'category': forms.TextInput(attrs={
+            'category': forms.Select(attrs={
+                'class': 'input select',
+            }),
+        }
+
+
+class GlossaryCategoryForm(forms.ModelForm):
+    class Meta:
+        model = GlossaryCategory
+        fields = ('name', 'description', 'icon', 'order')
+        widgets = {
+            'name': forms.TextInput(attrs={
                 'class': 'input',
-                'placeholder': 'التصنيف (اختياري)',
+                'placeholder': 'اسم التصنيف',
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'input',
+                'rows': 3,
+                'placeholder': 'وصف التصنيف (اختياري)',
+            }),
+            'icon': forms.TextInput(attrs={
+                'class': 'input',
+                'placeholder': 'أيقونة (اختياري)',
+            }),
+            'order': forms.NumberInput(attrs={
+                'class': 'input',
+                'placeholder': '0',
             }),
         }
