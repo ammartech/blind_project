@@ -165,7 +165,7 @@
 
 {% block extra_js %}
 <script>
-(function() {
+document.addEventListener('DOMContentLoaded', function() {
   // ──── CSRF helper ────
   function getCSRF() {
     for (let c of document.cookie.split(';')) {
@@ -348,14 +348,21 @@
 
     recognition.onerror = (e) => {
       console.error('STT Error:', e.error);
+      // Always show the status div so the user sees the error
+      statusDiv.classList.remove('hidden');
       if (e.error === 'no-speech') {
-        statusText.textContent = '⚠ لم يتم رصد كلام. حاول مرة أخرى.';
+        statusText.textContent = '⚠ لم يتم رصد كلام — تحدث بصوت أعلى أو اضغط إيقاف وأعد المحاولة.';
       } else if (e.error === 'not-allowed') {
-        statusText.textContent = '⚠ يرجى السماح بالوصول إلى الميكروفون.';
+        statusText.textContent = '⚠ لم يُسمح بالميكروفون — انقر على أيقونة القفل في شريط العنوان واسمح للموقع بالميكروفون.';
+        isListening = false;
+      } else if (e.error === 'network') {
+        statusText.textContent = '⚠ خطأ في الشبكة — تأكد من اتصالك بالإنترنت (يحتاج Chrome الاتصال للتعرف على الصوت).';
+      } else if (e.error === 'service-not-allowed') {
+        statusText.textContent = '⚠ الخدمة غير متاحة — استخدم وضع الخادم بدلاً.';
       } else {
         statusText.textContent = '⚠ خطأ: ' + e.error;
       }
-      setTimeout(() => { if (!isListening) statusDiv.classList.add('hidden'); }, 3000);
+      setTimeout(() => { if (!isListening) statusDiv.classList.add('hidden'); }, 5000);
     };
 
     recognition.onend = () => {
@@ -655,6 +662,6 @@
       }
     });
   }
-})();
+}); // end DOMContentLoaded
 </script>
 {% endblock %}
