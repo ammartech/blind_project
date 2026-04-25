@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
-{% block title %}تسجيل الدخول | منصة طيبة الصوتية{% endblock %}
+{% load static %}
+{% block title %}تسجيل الدخول | منصة إيبان{% endblock %}
 
 {% block content %}
 <div class="auth">
@@ -8,19 +9,27 @@
     <div class="auth-visual-content">
       <div class="auth-logo">
         <span class="auth-logo-dot"></span>
-        طيبة
+        إيبان
       </div>
       <h2>مرحباً بعودتك!</h2>
       <p>سجّل دخولك للوصول إلى خدمات المنصة والاستفسارات الخاصة بك.</p>
-      
+
+      <div class="auth-feature">
+        <span class="auth-feature-icon">🎙️</span>
+        <div class="auth-feature-text">
+          <strong>تسجيل دخول صوتي</strong>
+          <span>سجّل دخولك بصوتك دون استخدام اليد</span>
+        </div>
+      </div>
+
       <div class="auth-feature">
         <span class="auth-feature-icon">📚</span>
         <div class="auth-feature-text">
           <strong>خدمة الاستفسارات</strong>
-          <span>تواصل مع أخصائيي المكتبة</span>
+          <span>تواصل صوتياً مع أخصائيي المكتبة</span>
         </div>
       </div>
-      
+
       <div class="auth-feature">
         <span class="auth-feature-icon">🔊</span>
         <div class="auth-feature-text">
@@ -63,4 +72,8 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script defer src="{% static 'js/voice-login.js' %}"></script>
 {% endblock %}

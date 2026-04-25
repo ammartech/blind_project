@@ -1,14 +1,14 @@
 {% extends 'base.html' %}
-{% block title %}الرئيسية | منصة طيبة الصوتية{% endblock %}
+{% block title %}الرئيسية | منصة إيبان{% endblock %}
 {% block content %}
 <section class="hero">
   <div class="hero-card">
     <p class="badge" style="color: #ffffff;">❤️ تعاطف • 💙 ثقة • 🤲 ذهبي عالي التباين • 🤍 إتاحة</p>
-    <h1 style="color: #ffffff;">منصة صوتية رقمية لدعم خدمات المعلومات للمكفوفين في المكتبات الجامعية</h1>
+    <h1 style="color: #ffffff;">إيبان — منصة صوتية رقمية لدعم خدمات المعلومات لذوي الإعاقة البصرية في المكتبات الجامعية</h1>
     <p class="lead" style="color: rgba(255, 255, 255, 0.92);">
-      خدمة مبسّطة: <strong>صوت → نص → رد نصي → صوت</strong>.
-      اطرح سؤالك صوتيًا، وسيجيبك أخصائي المكتبة.
-      <button class="tts-btn" data-tts="خدمة مبسّطة: صوت ثم نص ثم رد نصي ثم صوت. اطرح سؤالك صوتيًا وسيجيبك أخصائي المكتبة." aria-label="قراءة النص">🔊</button>
+      تجربة كاملة بالصوت: تصفّح، تسجيل دخول، وطرح أسئلة دون استخدام اليد.
+      قل "ساعدني" لمعرفة الأوامر الصوتية.
+      <button class="tts-btn" data-tts="إيبان منصة صوتية كاملة لذوي الإعاقة البصرية. يمكنك التصفح وتسجيل الدخول وطرح الأسئلة بصوتك فقط. قل ساعدني لمعرفة الأوامر." aria-label="قراءة النص">🔊</button>
     </p>
     <div class="cta-row">
       {% if user.is_authenticated %}
@@ -23,7 +23,7 @@
   <div class="hero-side">
     <div class="stat">
       <div class="stat-num">2</div>
-      <div class="stat-label">أدوار مستخدمين<br>مكفوف / أخصائي مكتبة</div>
+      <div class="stat-label">أدوار مستخدمين<br>مستفيد من ذوي الإعاقة البصرية / أخصائي مكتبة</div>
     </div>
     <div class="stat">
       <div class="stat-num">5</div>
@@ -37,8 +37,8 @@
 </section>
 <section class="grid-3">
   <article class="card">
-    <h2>للـمكفوفين</h2>
-    <p>أرسل سؤالاً بصوتك أو بنص، وتابع الردود داخل لوحة التحكم.</p>
+    <h2>لذوي الإعاقة البصرية</h2>
+    <p>تنقّل في الموقع، سجّل دخولك، وأرسل سؤالك بصوتك فقط — دون الحاجة لاستخدام اليد.</p>
   </article>
   <article class="card">
     <h2>لأخصائي المكتبة</h2>

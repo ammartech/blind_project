@@ -8,7 +8,7 @@ class User(AbstractUser):
     """
 
     class Role(models.TextChoices):
-        BLIND = 'blind', 'مستفيد (مكفوف)'
+        BLIND = 'blind', 'مستفيد من ذوي الإعاقة البصرية'
         LIBRARIAN = 'librarian', 'أخصائي مكتبة'
 
     class Gender(models.TextChoices):
