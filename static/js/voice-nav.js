@@ -8,9 +8,9 @@
   'use strict';
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    console.warn('[VoiceNav] المتصفح لا يدعم التعرف على الصوت.');
-    return;
+  const HAS_SR = !!SpeechRecognition;
+  if (!HAS_SR) {
+    console.warn('[VoiceNav] المتصفح لا يدعم التعرف على الصوت. سيظهر الزر مع رسالة توجيهية.');
   }
 
   const URLS = (window.IBAN_URLS || {});
@@ -176,7 +176,9 @@
   fab.className = 'voice-nav-fab';
   fab.type = 'button';
   fab.setAttribute('aria-label', 'تشغيل الأوامر الصوتية');
-  fab.title = 'الأوامر الصوتية - اضغط أو قل "ساعدني"';
+  fab.title = HAS_SR
+    ? 'الأوامر الصوتية - اضغط أو استخدم Alt+V'
+    : 'الأوامر الصوتية غير متاحة في هذا المتصفح - استخدم Chrome أو Edge';
   fab.innerHTML = '🎙️';
 
   const status = document.createElement('div');
@@ -186,11 +188,20 @@
   status.setAttribute('aria-live', 'polite');
   status.innerHTML = '<span class="voice-nav-pulse"></span><span id="voice-nav-status-text">جاهز</span>';
 
-  document.addEventListener('DOMContentLoaded', () => {
-    document.body.appendChild(fab);
-    document.body.appendChild(status);
-    fab.addEventListener('click', toggleListening);
-  });
+  function injectUI() {
+    if (!document.body) return false;
+    if (!document.getElementById('voice-nav-fab')) {
+      document.body.appendChild(fab);
+      document.body.appendChild(status);
+      fab.addEventListener('click', toggleListening);
+    }
+    return true;
+  }
+
+  // حقن واجهة المستخدم في أقرب وقت ممكن: مباشرةً إذا كان body جاهزاً، وإلا انتظر DOMContentLoaded
+  if (!injectUI()) {
+    document.addEventListener('DOMContentLoaded', injectUI);
+  }
 
   let recognition = null;
   let listening = false;
@@ -209,6 +220,13 @@
 
   function startListening() {
     if (listening) return;
+
+    if (!HAS_SR) {
+      setStatus('⚠ هذا المتصفح لا يدعم الأوامر الصوتية — يرجى استخدام Chrome أو Edge على Android/Windows', true);
+      speak('عذراً، متصفحك الحالي لا يدعم الأوامر الصوتية. يرجى استخدام Chrome أو Edge.');
+      return;
+    }
+
     manuallyStopped = false;
 
     recognition = new SpeechRecognition();
@@ -316,17 +334,24 @@
     }
   });
 
-  // الإعلان عن الصفحة عند تحميلها (مرة واحدة فقط)
+  // الإعلان عن الصفحة عند تحميلها (مرة واحدة فقط لكل جلسة)
   document.addEventListener('DOMContentLoaded', () => {
     const announced = sessionStorage.getItem('iban_voice_announced');
     if (!announced) {
       sessionStorage.setItem('iban_voice_announced', '1');
       setTimeout(() => {
         const title = document.title.split('|')[0].trim() || 'صفحة';
-        speak(
-          'مرحباً بك في منصة إيبان. أنت الآن في ' + title + '. ' +
-          'اضغط على زر الميكروفون أسفل الشاشة، أو اضغط Alt و V، ثم قل أمراً صوتياً للتنقل. قل ساعدني لمعرفة الأوامر.'
-        );
+        if (HAS_SR) {
+          speak(
+            'مرحباً بك في منصة إيبان. أنت الآن في ' + title + '. ' +
+            'اضغط على زر الميكروفون أسفل الشاشة، أو اضغط Alt و V، ثم قل أمراً صوتياً للتنقل. قل ساعدني لمعرفة الأوامر.'
+          );
+        } else {
+          speak(
+            'مرحباً بك في منصة إيبان. أنت الآن في ' + title + '. ' +
+            'متصفحك الحالي لا يدعم الأوامر الصوتية، يرجى استخدام Chrome أو Edge للحصول على التجربة الكاملة.'
+          );
+        }
       }, 800);
     }
   });
