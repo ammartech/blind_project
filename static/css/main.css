@@ -2086,3 +2086,116 @@ textarea.input{
     font-size: 1rem;
   }
 }
+
+/* ============================================================
+   Voice Navigation System (Global) — منصة إيبان
+   ============================================================ */
+.voice-nav-fab {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 1.25rem;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #1E4ED8 0%, #2563eb 100%);
+  color: #fff;
+  font-size: 28px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(30, 78, 216, 0.45);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.voice-nav-fab:hover,
+.voice-nav-fab:focus {
+  transform: scale(1.06);
+  outline: 3px solid #F2B705;
+  outline-offset: 3px;
+}
+.voice-nav-fab.listening {
+  background: linear-gradient(135deg, #D72638 0%, #ef4444 100%);
+  animation: voice-nav-pulse 1.4s ease-in-out infinite;
+}
+@keyframes voice-nav-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(215, 38, 56, 0.6); }
+  50%      { box-shadow: 0 0 0 14px rgba(215, 38, 56, 0); }
+}
+
+.voice-nav-status {
+  position: fixed;
+  bottom: 6.25rem;
+  left: 1.25rem;
+  max-width: 360px;
+  background: #ffffff;
+  border: 2px solid #1E4ED8;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+  font-weight: 500;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 9999;
+  font-size: 0.95rem;
+}
+.voice-nav-status.hidden { display: none; }
+.voice-nav-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #D72638;
+  animation: voice-nav-pulse-dot 1s infinite;
+  flex-shrink: 0;
+}
+@keyframes voice-nav-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(0.7); }
+}
+
+/* ============================================================
+   Voice Login Panel
+   ============================================================ */
+.voice-login-panel {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 2px solid #1E4ED8;
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+.voice-login-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 1.05rem;
+  color: #1E4ED8;
+}
+.voice-login-icon { font-size: 1.5rem; }
+.voice-login-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: #334155;
+  line-height: 1.6;
+}
+.voice-login-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.voice-login-controls .hidden { display: none; }
+.voice-login-status {
+  margin-top: 0.75rem;
+  min-height: 1.5rem;
+  font-weight: 500;
+  color: #0f172a;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 480px) {
+  .voice-nav-fab { width: 56px; height: 56px; font-size: 24px; }
+  .voice-nav-status { left: 0.5rem; right: 0.5rem; max-width: none; bottom: 5.5rem; }
+}

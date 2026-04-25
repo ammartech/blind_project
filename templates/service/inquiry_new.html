@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}استفسار جديد | منصة طيبة الصوتية{% endblock %}
+{% block title %}استفسار جديد | منصة إيبان{% endblock %}
 
 {% block content %}
 <div class="page-head">
@@ -124,10 +124,11 @@
         <strong>الأوامر الصوتية (وضع المتصفح):</strong><br>
         <span class="stt-cmd">«عنوان»</span> للكتابة في العنوان &nbsp;
         <span class="stt-cmd">«سؤال»</span> للكتابة في نص السؤال &nbsp;
-        <span class="stt-cmd">«سجّل»</span> لبدء التسجيل &nbsp;
+        <span class="stt-cmd">«ابدأ التسجيل»</span> أو <span class="stt-cmd">«سجّل»</span> لبدء التسجيل &nbsp;
         <span class="stt-cmd">«توقّف»</span> لإيقاف التسجيل &nbsp;
-        <span class="stt-cmd">«امسح»</span> لمسح الحقل &nbsp;
-        <span class="stt-cmd">«أرسل»</span> لإرسال الاستفسار
+        <span class="stt-cmd">«امسح»</span> أو <span class="stt-cmd">«احذف»</span> لمسح الحقل &nbsp;
+        <span class="stt-cmd">«أرسل»</span> لإرسال الاستفسار &nbsp;
+        <span class="stt-cmd">«إلغاء»</span> لإلغاء العملية
       </div>
     </div>
 
@@ -555,34 +556,44 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // ──── Voice commands (browser mode only) ────
   function checkVoiceCommand(text) {
-    const normalized = text.replace(/[ًٌٍَُِّْ]/g, '').trim();
+    // إزالة التشكيل وتطبيع الحروف
+    const normalized = text
+      .replace(/[ًٌٍَُِّْـ]/g, '')
+      .replace(/[إأآا]/g, 'ا')
+      .replace(/ى/g, 'ي')
+      .trim();
 
-    if (/^(عنوان|العنوان|title)/i.test(normalized)) {
+    if (/^(عنوان|العنوان|title)\b/i.test(normalized)) {
       setTarget('title');
       statusText.textContent = '🎯 تم التبديل إلى: العنوان';
       return true;
     }
-    if (/^(سؤال|السؤال|نص|النص|question|text)/i.test(normalized)) {
+    if (/^(سوال|السوال|نص السوال|النص|question|text)\b/i.test(normalized)) {
       setTarget('question');
       statusText.textContent = '🎯 تم التبديل إلى: نص السؤال';
       return true;
     }
-    if (/^(سجل|سجّل|ابدأ التسجيل|ابدأ|record|start)/i.test(normalized)) {
+    if (/^(سجل|ابدا التسجيل|ابدا|بدا التسجيل|تسجيل|record|start recording|start)\b/i.test(normalized)) {
       startListening();
       return true;
     }
-    if (/^(توقف|توقّف|قف|وقف|stop)/i.test(normalized)) {
+    if (/^(توقف|قف|وقف|اوقف ايقاف|stop recording|stop)\b/i.test(normalized)) {
       stopListening();
       return true;
     }
-    if (/^(امسح|مسح|حذف|احذف|clear|delete)/i.test(normalized)) {
+    if (/^(امسح|مسح|حذف|احذف|الغ المحتوي|clear|delete)\b/i.test(normalized)) {
       const field = getActiveField();
       field.value = '';
       field.dispatchEvent(new Event('input', { bubbles: true }));
       statusText.textContent = '🗑 تم مسح ' + fieldNames[activeTarget];
       return true;
     }
-    if (/^(أرسل|ارسل|إرسال|ابعث|send|submit)/i.test(normalized)) {
+    if (/^(الغاء|الغي|cancel)\b/i.test(normalized)) {
+      stopListening();
+      statusText.textContent = '❌ تم إلغاء التسجيل';
+      return true;
+    }
+    if (/^(ارسل|ارسال|ابعث|اطلب|send|submit)\b/i.test(normalized)) {
       stopListening();
       statusText.textContent = '📤 جاري إرسال الاستفسار...';
       statusDiv.classList.remove('hidden');
